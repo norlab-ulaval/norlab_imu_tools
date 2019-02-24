@@ -4,14 +4,14 @@
 -->
 <launch>
   <node pkg="norlab_imu_tools" type="imu_attitude_to_tf_node" name="imu_attitude_to_tf_node" output="screen">
-    <remap from="imu_topic" to="/imu/data_filtered" />
+    <remap from="imu_topic" to="/mti/sensor/imu" />
     <param name="odom_frame" value="odom" />
     <param name="base_frame" value="base_link" />
 
     ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## E.g. in our peli-case, the IMU is mounted upside-down, so set the RPY appropriately
     ## Values in RAD 
-    <rosparam param="imu_alignment_rpy">[0.0, 0.0, -1.57]</rosparam>
+    <rosparam param="imu_alignment_rpy">[3.14159265359, 0.0, 0.0]</rosparam>
 
     ## If odom message needed (but keep in mind that only the orientation makes sense):
     <param name="publish_odom" value="True" />
