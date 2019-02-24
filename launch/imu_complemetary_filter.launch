@@ -2,6 +2,8 @@
 <launch>
 
     #### Complementary filter
+    #### Intended for IMU's like MTi-10 which don't do their own attitude estimation
+    #### or for the case you don't trust them they do it properly and want to do your own
 
     <node pkg="imu_complementary_filter" type="complementary_filter_node"
         name="complementary_filter_gain_node" output="screen">
@@ -12,7 +14,7 @@
         <param name="gain_acc" value="0.01"/>
         <param name="gain_mag" value="0.01"/>
         <param name="publish_debug_topics" value="false"/>
-        <param name="publish_tf" value="true"/>
+        <param name="publish_tf" value="false"/>
 
 
         <remap from="/imu/data_raw" to="/imu/data"/>

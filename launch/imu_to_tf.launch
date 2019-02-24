@@ -1,0 +1,12 @@
+<!-- IMU message attitude to TF relay (with the option to publish odom messages as well
+     Warning: Our IMU's typpicaly cannot estimate translation (except for the fancy MTi-G 
+     and similar with GPS. This relay fills the translation fields with zeros.
+-->
+<launch>
+  <node pkg="norlab_imu_tools" type="imu_attitude_to_tf_node" name="imu_attitude_to_tf_node" output="screen">
+    <remap from="imu_topic" to="/imu/data_filtered" />
+    <param name="odom_frame" value="odom" />
+    <param name="base_frame" value="base_link" />
+    <rosparam param="imu_alignment_rpy">[0.0, 0.0, -1.57]</rosparam>
+  </node>
+</launch>
