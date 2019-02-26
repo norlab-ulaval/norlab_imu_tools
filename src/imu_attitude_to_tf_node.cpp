@@ -65,7 +65,7 @@ void imuMsgCallback(const sensor_msgs::Imu& imu_msg)
 {
   tf::quaternionMsgToTF(imu_msg.orientation, tmp_);
 
-  tmp_ = imu_alignment_*tmp_;
+  tmp_ = tmp_*imu_alignment_;
   
   transform_.setRotation(tmp_);
   transform_.stamp_ = imu_msg.header.stamp;
