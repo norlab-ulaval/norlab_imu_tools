@@ -46,7 +46,10 @@ tf::TransformBroadcaster* tfB_;
 tf::StampedTransform transform_;
 tf::Quaternion tmp_;
 tf::Quaternion imu_alignment_;
+tf::Quaternion mag_north_correction_;
+
 std::vector<double> imu_alignment_rpy_(3,0.0);
+double mag_north_correction_yaw_ = 0;
 
 // odom stuff
 bool p_publish_odom_;
@@ -65,7 +68,7 @@ void imuMsgCallback(const sensor_msgs::Imu& imu_msg)
 {
   tf::quaternionMsgToTF(imu_msg.orientation, tmp_);
 
-  tmp_ = tmp_*imu_alignment_;
+  tmp_ = mag_north_correction_*tmp_*imu_alignment_;
   
   transform_.setRotation(tmp_);
   transform_.stamp_ = imu_msg.header.stamp;
@@ -95,6 +98,7 @@ int main(int argc, char **argv) {
   pn.param("publish_odom", p_publish_odom_, false);
   pn.param("odom_topic_name", p_odom_topic_name_, std::string("imu_odom"));
 
+  // Quaternion for IMU alignment
   if(!pn.getParam("imu_alignment_rpy", imu_alignment_rpy_))
   {
     ROS_WARN("Parameter imu_alignment_rpy is not a list of three numbers, setting default 0,0,0");
@@ -107,11 +111,22 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Quaternion for Magnetic North correction
+  if(!pn.getParam("mag_north_correction_yaw", mag_north_correction_yaw_))
+  {
+    ROS_WARN("Parameter mag_north_correction_yaw is not a double, setting default 0 radians");
+  }
+
   
   // Evaluate alignment quternion
   imu_alignment_.setRPY(imu_alignment_rpy_[0],
                         imu_alignment_rpy_[1],
-                        imu_alignment_rpy_[2]);   
+                        imu_alignment_rpy_[2]);
+
+  // Evaluate nag. north corr. quternion
+  mag_north_correction_.setRPY(0.0,
+                               0.0,
+                               mag_north_correction_yaw_);
 
   // Prepare the transform, set the origin to zero
   tfB_ = new tf::TransformBroadcaster();
