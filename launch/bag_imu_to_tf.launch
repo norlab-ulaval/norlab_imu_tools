@@ -5,14 +5,14 @@
 <launch>
   <node pkg="norlab_imu_tools" type="imu_attitude_to_tf_node" name="imu_attitude_to_tf_node" output="screen">
     <remap from="imu_topic" to="/mti/sensor/imu" />
-    <param name="odom_frame" value="odom" />
-    <param name="base_frame" value="base_link" />
+    <param name="odom_frame" value="world" />
+    <param name="base_frame" value="imu_link" />
 
     ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## E.g. in our peli-case, the IMU is mounted upside-down, so set the RPY appropriately
     ## Values in RAD 
     <rosparam param="imu_alignment_rpy">[3.14159265359, 0.0, 3.14159265359]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
-    <param name="mag_north_correction_yaw" value="0.0" />
+    <param name="mag_north_correction_yaw" value="0.27331833" /> <!-- 15.66 deg == 15°40'-->
 
 
     ## If odom message needed (but keep in mind that only the orientation makes sense):
