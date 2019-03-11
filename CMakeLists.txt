@@ -136,6 +136,7 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(imu_attitude_to_tf_node src/imu_attitude_to_tf_node.cpp)
+add_executable(imu_and_fix_to_tf_node src/imu_attitude_and_fix_to_tf_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -151,6 +152,10 @@ add_executable(imu_attitude_to_tf_node src/imu_attitude_to_tf_node.cpp)
 target_link_libraries(imu_attitude_to_tf_node
    ${catkin_LIBRARIES}
  )
+
+target_link_libraries(imu_and_fix_to_tf_node
+        ${catkin_LIBRARIES}
+        )
 
 #############
 ## Install ##
