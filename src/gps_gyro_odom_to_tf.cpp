@@ -46,8 +46,13 @@ std::string p_base_frame_;
 tf::TransformBroadcaster *tfB_;
 tf::StampedTransform transform_;
 tf::Quaternion tmp_;
+tf::Quaternion mag_heading_delta_quat_;
 tf::Quaternion imu_alignment_;
 tf::Quaternion mag_north_correction_;
+bool mag_heading_collected = false;
+bool mag_heading_applied   = false;
+tfScalar mag_yaw = std::nan("");
+
 
 std::vector<double> imu_alignment_rpy_(3, 0.0);
 double mag_north_correction_yaw_ = 0;
@@ -70,10 +75,49 @@ namespace tf { typedef btMatrix3x3 Matrix3x3; }
 #endif
 
 
+// this callback purpose is to collect initial guess of the mag. north
+// after that, the subscriber will unsubscribe
+void imuMsgMagCallback(const sensor_msgs::Imu &imu_msg) {
+    tf::Quaternion mag_heading_quat_;
+
+    tf::quaternionMsgToTF(imu_msg.orientation, mag_heading_quat_);
+
+    if(mag_heading_collected) return;
+
+    tfScalar pitch, roll;
+
+    mag_heading_collected = true;
+    mag_heading_quat_ = mag_north_correction_ * mag_heading_quat_ * imu_alignment_;
+
+    tf::Matrix3x3 mat(mag_heading_quat_);
+    mat.getEulerYPR(mag_yaw, pitch, roll);
+
+    mag_heading_collected = true;
+}
+
 void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
     tf::quaternionMsgToTF(imu_msg.orientation, tmp_);
 
-    tmp_ = mag_north_correction_ * tmp_ * imu_alignment_;
+    tmp_ = tmp_ * imu_alignment_;
+
+    // we have to compute the mag-yaw alignment quaternion to point out gyro-odometry to the desired heading
+    if(!mag_heading_applied){
+        tfScalar yaw_gyro, pitch_gyro, roll_gyro;
+
+        tf::Matrix3x3 mat(tmp_);
+        mat.getEulerYPR(yaw_gyro, pitch_gyro, roll_gyro);
+
+        tf::Quaternion mag_heading_quat;
+        mag_heading_quat.setRPY(roll_gyro, pitch_gyro, mag_yaw);
+
+        mag_heading_delta_quat_ = mag_heading_quat * tmp_.inverse();
+        mag_heading_delta_quat_.normalize();
+
+        mag_heading_applied = true;
+
+    }
+
+    tmp_ = mag_heading_delta_quat_ * tmp_;
 
     transform_.setRotation(tmp_);
     transform_.setOrigin(tf::Vector3(odom_from_gps.position.x,odom_from_gps.position.y,odom_from_gps.position.z));
@@ -173,9 +217,21 @@ int main(int argc, char **argv) {
 
     // Subscribe the IMU and start the loop
     ros::Subscriber gps_odom_subscriber = n.subscribe("gps_odom_topic", 10, fixMsgCallback);
-    ros::Subscriber imu_subscriber = n.subscribe("imu_topic", 10, imuMsgCallback);
+    ros::Subscriber imu_mag_subscriber = n.subscribe("imu_topic", 10, imuMsgMagCallback);
+    ROS_INFO("Subcribed to gps and IMU with mag. heading");
 
-    ros::spin();
+    ros::Rate r(10);
+    while(!mag_heading_collected && ros::ok()){
+        ros::spinOnce();
+        r.sleep();
+    }
+
+    ROS_INFO("Mag. heading collected, switching to attitude estimation excluding mag. data.");
+    if(ros::ok()) {
+        imu_mag_subscriber.shutdown();
+        ros::Subscriber imu_subscriber = n.subscribe("imu_nomag_topic", 10, imuMsgCallback);
+        ros::spin();
+    }
 
     delete tfB_;
     delete odom_pub_;
