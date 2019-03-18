@@ -37,13 +37,16 @@
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/Quaternion.h"
 
+#include <memory>
+
 // frame names
 std::string p_odom_frame_;
 std::string p_base_frame_;
 
 // tf stuff
-tf::TransformBroadcaster* tfB_;
+std::unique_ptr<tf::TransformBroadcaster> tfB_;
 tf::StampedTransform transform_;
+tf::StampedTransform transformAcc_;
 tf::Quaternion tmp_;
 tf::Quaternion imu_alignment_;
 tf::Quaternion mag_north_correction_;
@@ -74,6 +77,13 @@ void imuMsgCallback(const sensor_msgs::Imu& imu_msg)
   transform_.stamp_ = imu_msg.header.stamp;
 
   tfB_->sendTransform(transform_);
+
+  transformAcc_.getOrigin().setX(imu_msg.linear_acceleration.x);
+  transformAcc_.getOrigin().setY(imu_msg.linear_acceleration.y);
+  transformAcc_.getOrigin().setZ(imu_msg.linear_acceleration.z);
+  transformAcc_.stamp_ = imu_msg.header.stamp;
+
+  tfB_->sendTransform(transformAcc_);
 
   if(p_publish_odom_)
   {
@@ -129,12 +139,16 @@ int main(int argc, char **argv) {
                                mag_north_correction_yaw_);
 
   // Prepare the transform, set the origin to zero
-  tfB_ = new tf::TransformBroadcaster();
+  tfB_ = std::make_unique<tf::TransformBroadcaster>();
   transform_.getOrigin().setX(0.0);
   transform_.getOrigin().setY(0.0);
   transform_.getOrigin().setZ(0.0);
   transform_.frame_id_ = p_odom_frame_;
   transform_.child_frame_id_ = p_base_frame_;
+
+  transformAcc_.setIdentity();
+  transformAcc_.frame_id_ = p_odom_frame_;
+  transformAcc_.child_frame_id_ = "accelero";
 
   // If odom required, advertize the publisher and prepare the constant parts of the message
   if(p_publish_odom_)
@@ -163,7 +177,6 @@ int main(int argc, char **argv) {
 
   ros::spin();
 
-  delete tfB_;
   delete odom_pub_;
 
   return 0;
