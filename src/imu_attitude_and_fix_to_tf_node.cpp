@@ -50,6 +50,7 @@ tf::StampedTransform transform_;
 tf::Quaternion tmp_;
 tf::Quaternion imu_alignment_;
 tf::Quaternion mag_north_correction_;
+tf::Quaternion fixed_yaw_rotation_by_pi(0.0, 0.0, 1.0, 0);
 
 std::vector<double> imu_alignment_rpy_(3, 0.0);
 double mag_north_correction_yaw_ = 0;
@@ -80,6 +81,7 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
     tf::quaternionMsgToTF(imu_msg.orientation, tmp_);
 
     tmp_ = mag_north_correction_ * tmp_ * imu_alignment_;
+    tmp_.normalize();
 
     transform_.setRotation(tmp_);
     transform_.setOrigin(tf::Vector3(odom_from_gps.position.x,odom_from_gps.position.y,odom_from_gps.position.z));
@@ -128,11 +130,49 @@ void fixMsgCallback(const nav_msgs::Odometry &gps_odom_msg) {
                 pow(current_pose.position.y-last_heading_gps_pose.position.y,2)
                 );
         if (dist_since_last_pose>=p_gps_heading_min_dist){
-            current_gps_heading = atan2(last_heading_gps_pose.position.y - current_pose.position.y,
-                                        last_heading_gps_pose.position.x - current_pose.position.x);
+            current_gps_heading = atan2(current_pose.position.y - last_heading_gps_pose.position.y,
+                                        current_pose.position.x - last_heading_gps_pose.position.x);
 
-            debug << "Heading " << current_gps_heading << " rad, " << current_gps_heading*180.0/3.1416 << "deg." << std::endl;
-            ROS_INFO(debug.str().c_str());
+
+            tfScalar yaw_imu, pitch_imu, roll_imu;
+            tf::Matrix3x3 mat(tmp_);
+            mat.getEulerYPR(yaw_imu, pitch_imu, roll_imu);
+
+            tf::Quaternion attitude_by_gps;
+            attitude_by_gps.setRPY(roll_imu, pitch_imu, (tfScalar) current_gps_heading );
+
+            // For skidoo: we are actually moving backwards, so we need to rotate the attitude by 180 degs around z
+            attitude_by_gps = fixed_yaw_rotation_by_pi * attitude_by_gps;
+
+
+            // Difference quaternion between the imu and gps
+            tf::Quaternion heading_difference = attitude_by_gps * tmp_.inverse();
+
+            // Apply with weight
+            tfScalar yaw_correction_angle = heading_difference.getAngle();
+            tf::Vector3 yaw_correction_axis = heading_difference.getAxis();
+
+            if(yaw_correction_angle >= 3.14159265359){   //whoops, the quaternion 4*pi periodicidy problem...
+                heading_difference = heading_difference * -1;   //this is the same rotation, but the shorter direction
+                yaw_correction_angle = heading_difference.getAngle();
+                yaw_correction_axis = heading_difference.getAxis();
+            }
+
+            // check the values
+            //tfScalar yaw_gps, pitch_gps, roll_gps;
+            //mat = tf::Matrix3x3(heading_difference);
+            //mat.getEulerYPR(yaw_gps, pitch_gps, roll_gps);
+            //
+            //debug << "Yaw difference: " << yaw_gps*180.0/3.1416 << ", Corr angle: " << yaw_correction_angle*180.0/3.1416 << std::endl;
+            //ROS_INFO(debug.str().c_str());
+            // end debug
+
+            yaw_correction_angle = yaw_correction_angle * p_gps_heading_correction_weight; // applying only a part of the rotation
+
+            heading_difference.setRotation(yaw_correction_axis, yaw_correction_angle);
+
+            mag_north_correction_ = heading_difference * mag_north_correction_;
+            mag_north_correction_.normalize();
 
 
             // dont forget to remember the last pose

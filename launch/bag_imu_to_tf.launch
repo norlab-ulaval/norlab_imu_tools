@@ -3,10 +3,15 @@
      and similar with GPS. This relay fills the translation fields with zeros.
 -->
 <launch>
-  <node pkg="norlab_imu_tools" type="imu_attitude_to_tf_node" name="imu_attitude_to_tf_node" output="screen">
+  <node pkg="norlab_imu_tools" type="imu_and_fix_to_tf_node" name="imu_and_fix_to_tf_node" output="screen">
     <remap from="imu_topic" to="/mti/sensor/imu" />
+    <remap from="gps_odom_topic" to="/odom_utm" />
     <param name="odom_frame" value="world" />
     <param name="base_frame" value="imu_link" />
+    <param name="publish_gps_translation" value="False" />
+    <param name="apply_gps_heading_correction" value="True" />
+    <param name="gps_heading_correction_weight" value="0.1" />
+    <param name="gps_heading_min_dist" value="1.5" />
 
     ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## E.g. in our peli-case, the IMU is mounted upside-down, so set the RPY appropriately
@@ -20,4 +25,11 @@
     <param name="odom_topic_name" value="imu_odom" />
 
   </node>
+
+  <node pkg="gps_common" type="utm_odometry_node" name="gps_to_umt_odom_node" output="screen">
+    <remap from="odom" to="odom_utm" />
+    <param name="frame_id" value="gps_world" />
+    <param name="child_frame_id" value="gps_base_link" />
+  </node>
+
 </launch>
