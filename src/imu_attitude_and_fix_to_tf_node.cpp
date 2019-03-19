@@ -36,6 +36,8 @@
 #include "sensor_msgs/Imu.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/Quaternion.h"
+#include <cmath>
+#include <sstream>
 
 
 // frame names
@@ -48,6 +50,7 @@ tf::StampedTransform transform_;
 tf::Quaternion tmp_;
 tf::Quaternion imu_alignment_;
 tf::Quaternion mag_north_correction_;
+tf::Quaternion fixed_yaw_rotation_by_pi(0.0, 0.0, 1.0, 0);
 
 std::vector<double> imu_alignment_rpy_(3, 0.0);
 double mag_north_correction_yaw_ = 0;
@@ -61,8 +64,12 @@ nav_msgs::Odometry odom_msg_;
 // gps stuff
 geometry_msgs::Pose odom_from_gps;
 geometry_msgs::Pose initial_gps;
+geometry_msgs::Pose last_heading_gps_pose;
 bool first_fix_received = false;
-
+bool p_publish_gps_translation = true;
+bool p_apply_gps_heading_correction = false;
+double p_gps_heading_correction_weight = 0.1;
+double p_gps_heading_min_dist = 3;
 
 #ifndef TF_MATRIX3x3_H
 typedef btScalar tfScalar;
@@ -74,6 +81,7 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
     tf::quaternionMsgToTF(imu_msg.orientation, tmp_);
 
     tmp_ = mag_north_correction_ * tmp_ * imu_alignment_;
+    tmp_.normalize();
 
     transform_.setRotation(tmp_);
     transform_.setOrigin(tf::Vector3(odom_from_gps.position.x,odom_from_gps.position.y,odom_from_gps.position.z));
@@ -98,10 +106,79 @@ void fixMsgCallback(const nav_msgs::Odometry &gps_odom_msg) {
         first_fix_received = true;
     }
 
-    odom_from_gps.position.x = gps_odom_msg.pose.pose.position.x - initial_gps.position.x;
-    odom_from_gps.position.y = gps_odom_msg.pose.pose.position.y - initial_gps.position.y;
-    odom_from_gps.position.z = gps_odom_msg.pose.pose.position.z - initial_gps.position.z;
+    // evaluate current pose in local frame
+    geometry_msgs::Pose current_pose;
+    current_pose.position.x = gps_odom_msg.pose.pose.position.x - initial_gps.position.x;
+    current_pose.position.y = gps_odom_msg.pose.pose.position.y - initial_gps.position.y;
+    current_pose.position.z = gps_odom_msg.pose.pose.position.z - initial_gps.position.z;
 
+    // publish pose if asked for
+    if(p_publish_gps_translation) {
+        odom_from_gps = current_pose;
+    }else{
+        odom_from_gps.position.x = 0;
+        odom_from_gps.position.y = 0;
+        odom_from_gps.position.z = 0;
+    }
+
+    // use the pose to estimate heading, if asked for
+    if(p_apply_gps_heading_correction){
+        std::stringstream debug;
+        double current_gps_heading = 0;
+        double dist_since_last_pose = sqrt(
+                pow(current_pose.position.x-last_heading_gps_pose.position.x,2) +
+                pow(current_pose.position.y-last_heading_gps_pose.position.y,2)
+                );
+        if (dist_since_last_pose>=p_gps_heading_min_dist){
+            current_gps_heading = atan2(current_pose.position.y - last_heading_gps_pose.position.y,
+                                        current_pose.position.x - last_heading_gps_pose.position.x);
+
+
+            tfScalar yaw_imu, pitch_imu, roll_imu;
+            tf::Matrix3x3 mat(tmp_);
+            mat.getEulerYPR(yaw_imu, pitch_imu, roll_imu);
+
+            tf::Quaternion attitude_by_gps;
+            attitude_by_gps.setRPY(roll_imu, pitch_imu, (tfScalar) current_gps_heading );
+
+            // For skidoo: we are actually moving backwards, so we need to rotate the attitude by 180 degs around z
+            attitude_by_gps = fixed_yaw_rotation_by_pi * attitude_by_gps;
+
+
+            // Difference quaternion between the imu and gps
+            tf::Quaternion heading_difference = attitude_by_gps * tmp_.inverse();
+
+            // Apply with weight
+            tfScalar yaw_correction_angle = heading_difference.getAngle();
+            tf::Vector3 yaw_correction_axis = heading_difference.getAxis();
+
+            if(yaw_correction_angle >= 3.14159265359){   //whoops, the quaternion 4*pi periodicidy problem...
+                heading_difference = heading_difference * -1;   //this is the same rotation, but the shorter direction
+                yaw_correction_angle = heading_difference.getAngle();
+                yaw_correction_axis = heading_difference.getAxis();
+            }
+
+            // check the values
+            //tfScalar yaw_gps, pitch_gps, roll_gps;
+            //mat = tf::Matrix3x3(heading_difference);
+            //mat.getEulerYPR(yaw_gps, pitch_gps, roll_gps);
+            //
+            //debug << "Yaw difference: " << yaw_gps*180.0/3.1416 << ", Corr angle: " << yaw_correction_angle*180.0/3.1416 << std::endl;
+            //ROS_INFO(debug.str().c_str());
+            // end debug
+
+            yaw_correction_angle = yaw_correction_angle * p_gps_heading_correction_weight; // applying only a part of the rotation
+
+            heading_difference.setRotation(yaw_correction_axis, yaw_correction_angle);
+
+            mag_north_correction_ = heading_difference * mag_north_correction_;
+            mag_north_correction_.normalize();
+
+
+            // dont forget to remember the last pose
+            last_heading_gps_pose = current_pose;
+        }
+    }
 }
 
 int main(int argc, char **argv) {
@@ -114,7 +191,12 @@ int main(int argc, char **argv) {
     pn.param("odom_frame", p_odom_frame_, std::string("odom"));
     pn.param("base_frame", p_base_frame_, std::string("base_link"));
     pn.param("publish_odom", p_publish_odom_, false);
+    pn.param("publish_gps_translation", p_publish_gps_translation, true);
+    pn.param("apply_gps_heading_correction", p_apply_gps_heading_correction, false);
+    pn.param("gps_heading_correction_weight", p_gps_heading_correction_weight, 0.1);
+    pn.param("gps_heading_min_dist", p_gps_heading_min_dist, 3.0);
     pn.param("odom_topic_name", p_odom_topic_name_, std::string("imu_odom"));
+
 
     // Quaternion for IMU alignment
     if (!pn.getParam("imu_alignment_rpy", imu_alignment_rpy_)) {
