@@ -36,6 +36,8 @@
 #include "sensor_msgs/Imu.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/Quaternion.h"
+#include <cmath>
+#include <sstream>
 
 
 // frame names
@@ -61,8 +63,12 @@ nav_msgs::Odometry odom_msg_;
 // gps stuff
 geometry_msgs::Pose odom_from_gps;
 geometry_msgs::Pose initial_gps;
+geometry_msgs::Pose last_heading_gps_pose;
 bool first_fix_received = false;
-
+bool p_publish_gps_translation = true;
+bool p_apply_gps_heading_correction = false;
+double p_gps_heading_correction_weight = 0.1;
+double p_gps_heading_min_dist = 3;
 
 #ifndef TF_MATRIX3x3_H
 typedef btScalar tfScalar;
@@ -98,10 +104,41 @@ void fixMsgCallback(const nav_msgs::Odometry &gps_odom_msg) {
         first_fix_received = true;
     }
 
-    odom_from_gps.position.x = gps_odom_msg.pose.pose.position.x - initial_gps.position.x;
-    odom_from_gps.position.y = gps_odom_msg.pose.pose.position.y - initial_gps.position.y;
-    odom_from_gps.position.z = gps_odom_msg.pose.pose.position.z - initial_gps.position.z;
+    // evaluate current pose in local frame
+    geometry_msgs::Pose current_pose;
+    current_pose.position.x = gps_odom_msg.pose.pose.position.x - initial_gps.position.x;
+    current_pose.position.y = gps_odom_msg.pose.pose.position.y - initial_gps.position.y;
+    current_pose.position.z = gps_odom_msg.pose.pose.position.z - initial_gps.position.z;
 
+    // publish pose if asked for
+    if(p_publish_gps_translation) {
+        odom_from_gps = current_pose;
+    }else{
+        odom_from_gps.position.x = 0;
+        odom_from_gps.position.y = 0;
+        odom_from_gps.position.z = 0;
+    }
+
+    // use the pose to estimate heading, if asked for
+    if(p_apply_gps_heading_correction){
+        std::stringstream debug;
+        double current_gps_heading = 0;
+        double dist_since_last_pose = sqrt(
+                pow(current_pose.position.x-last_heading_gps_pose.position.x,2) +
+                pow(current_pose.position.y-last_heading_gps_pose.position.y,2)
+                );
+        if (dist_since_last_pose>=p_gps_heading_min_dist){
+            current_gps_heading = atan2(last_heading_gps_pose.position.y - current_pose.position.y,
+                                        last_heading_gps_pose.position.x - current_pose.position.x);
+
+            debug << "Heading " << current_gps_heading << " rad, " << current_gps_heading*180.0/3.1416 << "deg." << std::endl;
+            ROS_INFO(debug.str().c_str());
+
+
+            // dont forget to remember the last pose
+            last_heading_gps_pose = current_pose;
+        }
+    }
 }
 
 int main(int argc, char **argv) {
@@ -114,7 +151,12 @@ int main(int argc, char **argv) {
     pn.param("odom_frame", p_odom_frame_, std::string("odom"));
     pn.param("base_frame", p_base_frame_, std::string("base_link"));
     pn.param("publish_odom", p_publish_odom_, false);
+    pn.param("publish_gps_translation", p_publish_gps_translation, true);
+    pn.param("apply_gps_heading_correction", p_apply_gps_heading_correction, false);
+    pn.param("gps_heading_correction_weight", p_gps_heading_correction_weight, 0.1);
+    pn.param("gps_heading_min_dist", p_gps_heading_min_dist, 3.0);
     pn.param("odom_topic_name", p_odom_topic_name_, std::string("imu_odom"));
+
 
     // Quaternion for IMU alignment
     if (!pn.getParam("imu_alignment_rpy", imu_alignment_rpy_)) {
