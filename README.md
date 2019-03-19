@@ -5,6 +5,9 @@ imu_attitude_to_tf node has to acknowledge Hector_slam: http://wiki.ros.org/hect
 // All rights reserved.
 
 ## Parameters of the imu (and gps) to tf tool
+
+**IMPORTANT** Skidoo moved backwards, so the GPS heading correction acts backwards as well. If used for anything else, find and disable the 180 deg rotation in the code...!
+
 ```xml
 <remap from="imu_topic" to="/mti/sensor/imu" />   # Raw imu input topic 
 <remap from="gps_odom_topic" to="/odom_utm" />    # UTM GPS coordinates input topic
