@@ -158,21 +158,27 @@ void fixMsgCallback(const nav_msgs::Odometry &gps_odom_msg) {
                 yaw_correction_axis = heading_difference.getAxis();
             }
 
-            // check the values
-            //tfScalar yaw_gps, pitch_gps, roll_gps;
-            //mat = tf::Matrix3x3(heading_difference);
-            //mat.getEulerYPR(yaw_gps, pitch_gps, roll_gps);
-            //
-            //debug << "Yaw difference: " << yaw_gps*180.0/3.1416 << ", Corr angle: " << yaw_correction_angle*180.0/3.1416 << std::endl;
-            //ROS_INFO(debug.str().c_str());
-            // end debug
+            yaw_correction_axis.setX((tfScalar) 0.0);   // to prevent numerical error creeping in
+            yaw_correction_axis.setY((tfScalar) 0.0);
 
-            yaw_correction_angle = yaw_correction_angle * p_gps_heading_correction_weight; // applying only a part of the rotation
 
-            heading_difference.setRotation(yaw_correction_axis, yaw_correction_angle);
+            double yaw_correction_angle_weighted = yaw_correction_angle * p_gps_heading_correction_weight; // applying only a part of the rotation
+            heading_difference.setRotation(yaw_correction_axis, yaw_correction_angle_weighted);
 
             mag_north_correction_ = heading_difference * mag_north_correction_;
             mag_north_correction_.normalize();
+
+
+            // check the values
+            tfScalar yaw_mag_calib, pitch_mag_calib, roll_mag_calib;
+            mat = tf::Matrix3x3(mag_north_correction_);
+            mat.getEulerYPR(yaw_mag_calib, pitch_mag_calib, roll_mag_calib);
+
+            debug << "Current mag. correction Z rot.: " << yaw_mag_calib*180.0/3.1416 << "deg ("<< yaw_mag_calib <<
+                     "rad), current GPS-IMU yaw error: " << yaw_correction_angle*180.0/3.1416 << "deg("<< yaw_correction_angle
+                      << "rad).";
+            ROS_INFO(debug.str().c_str());
+            // end debug
 
 
             // dont forget to remember the last pose

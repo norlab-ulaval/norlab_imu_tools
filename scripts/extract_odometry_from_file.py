@@ -25,9 +25,11 @@ for bag_filename in bag_filenames:
     bag = rosbag.Bag(bag_filename)
     icp_odom_file = open('/'.join(bag_filename.split('/')[0:-1])+'/'+bag_filename_stripped+'_icp_odom.csv', 'w')
     utm_odom_file = open('/'.join(bag_filename.split('/')[0:-1])+'/'+bag_filename_stripped+'_utm_odom.csv', 'w')
+    icp_match_stats_file = open('/'.join(bag_filename.split('/')[0:-1]) + '/' + bag_filename_stripped + '_icp_matchStats.csv', 'w')
+    icp_mapUp_stats_file = open('/'.join(bag_filename.split('/')[0:-1]) + '/' + bag_filename_stripped + '_icp_mapUpStats.csv', 'w')
     #measurement_joy_trigger_file = open('/'.join(bag_filename.split('/')[0:-1])+'/'+bag_filename_stripped+'_joy.csv', 'w')
 
-    for topic, msg, t in bag.read_messages(topics=['/odom_utm', '/icp_odom']):
+    for topic, msg, t in bag.read_messages(topics=['/odom_utm', '/icp_odom', '/icp_map_iteration_statistics', '/icp_match_iteration_statistics']):
         if topic == '/icp_odom':
             icp_odom_file.write('{0},{1:09d},{2},{3},{4},{5},{6},{7},{8}\n'.format(msg.header.stamp.secs,
                                                                    msg.header.stamp.nsecs,
@@ -51,9 +53,28 @@ for bag_filename in bag_filenames:
                                                                    msg.pose.pose.orientation.y,
                                                                    msg.pose.pose.orientation.z,
                                                                    msg.pose.pose.orientation.w))
+
+        elif topic == '/icp_match_iteration_statistics':
+            icp_match_stats_file.write('{0},{1:09d},{2},{3},{4},{5}\n'.format(msg.header.stamp.secs,
+                                                                               msg.header.stamp.nsecs,
+                                                                               msg.quaternion.x,
+                                                                               msg.quaternion.y,
+                                                                               msg.quaternion.z,
+                                                                               msg.quaternion.w))
+
+        elif topic == '/icp_map_iteration_statistics':
+            icp_mapUp_stats_file.write('{0},{1:09d},{2},{3},{4},{5}\n'.format(msg.header.stamp.secs,
+                                                                               msg.header.stamp.nsecs,
+                                                                               msg.quaternion.x,
+                                                                               msg.quaternion.y,
+                                                                               msg.quaternion.z,
+                                                                               msg.quaternion.w))
+
         else:
             raise ValueError('Message topic unexpected: '+topic)
 
     bag.close()
     icp_odom_file.close()
     utm_odom_file.close()
+    icp_match_stats_file.close()
+    icp_mapUp_stats_file.close()

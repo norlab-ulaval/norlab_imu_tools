@@ -2,8 +2,9 @@
  
 
 <node pkg="rosbag" type="record" name="rosbag_record_node"
-       args="record -o /home/vlad/norlab_data/skidoo/20190305/odom_replay 
-       /fix /icp_error_odom /icp_odom /mti/sensor/imu /mti/sensor/magnetic /nmea_sentence /odom_utm /tf /tf_static /time_reference /vel "
+       args="record -o /home/vlad/norlab_data/extracted_odom_bags/odom_replay 
+       /fix /icp_error_odom /icp_odom /mti/sensor/imu /mti/sensor/magnetic /nmea_sentence /odom_utm /tf /tf_static /time_reference /vel  
+       /icp_map_iteration_statistics /icp_match_iteration_statistics"
        />
 
 </launch>
