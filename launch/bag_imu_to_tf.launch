@@ -17,7 +17,9 @@
     ## E.g. in our peli-case, the IMU is mounted upside-down, so set the RPY appropriately
     ## Values in RAD 
     <rosparam param="imu_alignment_rpy">[3.14159265359, 0.0, 3.14159265359]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
-    <param name="mag_north_correction_yaw" value="0.27331833" /> <!-- 15.66 deg == 15°40'  => 0.27331833               0.43534373-->
+    <!-- from test in engineering  93.0953deg (1.62482rad),), actually I used 1.570796327.-->
+    <!-- from test in pouliot  106.192deg (1.8534rad) -->
+    <param name="mag_north_correction_yaw" value="1.8534" /> <!-- 15.66 deg == 15°40'  => 0.27331833              1.840796327 -> 15.66 deg + 90 deg -->
 
 
     ## If odom message needed (but keep in mind that only the orientation makes sense):
