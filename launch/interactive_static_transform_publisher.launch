@@ -1,0 +1,9 @@
+<launch>
+
+  <node pkg="norlab_imu_tools" type="interactive_static_transform_publisher.py" name="interactive_static_transform_publisher_node" output="screen">
+    <param name="child_frame" value="moving_frame" />
+    <param name="parent_frame" value="base_link" />
+    <param name="tf_publish_period_in_sec" value="0.1" />
+  </node>
+
+</launch>
