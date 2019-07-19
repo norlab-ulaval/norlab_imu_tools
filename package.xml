@@ -43,16 +43,22 @@
   <build_depend>sensor_msgs</build_depend>
   <build_depend>tf</build_depend>
   <build_depend>gps_common</build_depend>
+  <build_depend>interactive_markers</build_depend>
+  <build_depend>visualization_msgs</build_depend>
+
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>rospy</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <build_export_depend>sensor_msgs</build_export_depend>  
+  
   <exec_depend>roscpp</exec_depend>
   <exec_depend>tf</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>gps_common</exec_depend>
+  <exec_depend>interactive_markers</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

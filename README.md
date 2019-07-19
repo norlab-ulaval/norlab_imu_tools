@@ -32,3 +32,15 @@ imu_attitude_to_tf node has to acknowledge Hector_slam: http://wiki.ros.org/hect
 <param name="mag_north_correction_yaw" value="0.27331833" /> <!-- 15.66 deg == 15°40'  => 0.27331833               0.43534373-->
 ```
 
+## Interactive Static Transform tool
+
+This tool helps finding a transformation between two TF frames by providing
+an RVIZ interactive marker. The usage is straightforward:
+
+* Set your parent and child frame names in the launch file
+* Run the lauch file and also open the RVIZ
+* The initial transformation is identity, but you can modify it by displaying
+the interactive marker and moving it around
+* The marker also offers a context menu, the only command which is there
+prints the current transform value in the form of the *static_transform_publisher*
+rosrun command
