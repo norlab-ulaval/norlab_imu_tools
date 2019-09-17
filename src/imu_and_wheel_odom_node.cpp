@@ -7,6 +7,7 @@
 #include "sensor_msgs/Imu.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/Quaternion.h"
+#include "geometry_msgs/Point.h"
 #include <cmath>
 #include <sstream>
 
@@ -21,7 +22,7 @@ tf::StampedTransform transform_;
 tf::Quaternion tmp_;
 tf::Quaternion imu_alignment_;
 tf::Quaternion mag_north_correction_;
-tf::Quaternion fixed_yaw_rotation_by_pi(0.0, 0.0, 1.0, 0);
+//tf::Quaternion fixed_yaw_rotation_by_pi(0.0, 0.0, 1.0, 0);
 
 std::vector<double> imu_alignment_rpy_(3, 0.0);
 double mag_north_correction_yaw_ = 0;
@@ -33,7 +34,9 @@ ros::Publisher *odom_pub_;
 nav_msgs::Odometry odom_msg_;
 
 // input wheel odom stuff
-geometry_msgs::Pose current_position;
+tf::Vector3 current_position(0.0,0.0,0.0);
+tf::Vector3 current_linear_vel(0.0,0.0,0.0);
+
 bool initial_wheel_odom_received = false;
 ros::Time previous_w_odom_stamp;
 
@@ -58,7 +61,7 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
     tmp_.normalize();
 
     transform_.setRotation(tmp_);
-    transform_.setOrigin(tf::Vector3(current_position.position.x,current_position.position.y,current_position.position.z));
+    transform_.setOrigin(tf::Vector3(current_position.x(),current_position.y(),current_position.z()));
     transform_.stamp_ = imu_msg.header.stamp;
 
     tfB_->sendTransform(transform_);
@@ -67,7 +70,15 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
         geometry_msgs::Quaternion quat_msg;
         tf::quaternionTFToMsg(tmp_, quat_msg);
         odom_msg_.pose.pose.orientation = quat_msg;
-        odom_msg_.pose.pose.position = current_position.position;
+
+        odom_msg_.pose.pose.position.x = current_position.x();
+        odom_msg_.pose.pose.position.y = current_position.y();
+        odom_msg_.pose.pose.position.z = current_position.z();
+
+        odom_msg_.twist.twist.linear.x = current_linear_vel.x();
+        odom_msg_.twist.twist.linear.y = current_linear_vel.y();
+        odom_msg_.twist.twist.linear.z = current_linear_vel.z();
+
         odom_msg_.header.stamp = imu_msg.header.stamp;
         odom_pub_->publish(odom_msg_);
     }
@@ -75,8 +86,9 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
 
 void wheelOdomMsgCallback(const nav_msgs::Odometry &wheel_odom_msg) {
 
-    // evaluate current pose in local frame
-    geometry_msgs::Pose new_pose;
+    //
+    tf::Vector3 new_position;
+
 
     // to know our delta time step, we need the previous time stamp. The first odom message is used to initialize it
     if (!initial_wheel_odom_received){
@@ -85,19 +97,35 @@ void wheelOdomMsgCallback(const nav_msgs::Odometry &wheel_odom_msg) {
         return;
     }
 
-
-    //TODO: Integrate velocity
-
-
-
-
-    // publish pose if asked for
+    // compute and store new position if asked for
     if(p_allow_translation) {
-        current_position = new_pose;
-    }else{
-        current_position.position.x = 0;
-        current_position.position.y = 0;
-        current_position.position.z = 0;
+
+        // body to world rotation
+        tf::Transform rotation_body_to_world;
+        rotation_body_to_world.setOrigin( tf::Vector3(0.0, 0.0, 0.0) );      // no translation
+        rotation_body_to_world.setRotation( tmp_ );                          // current orientation
+
+
+        // express the velocity in the world frame
+        tf::Vector3 velocity_in_world = rotation_body_to_world * tf::Vector3(wheel_odom_msg.twist.twist.linear.x,
+                                                                             wheel_odom_msg.twist.twist.linear.y,
+                                                                             wheel_odom_msg.twist.twist.linear.z);
+                                                                             // for warthog, only x is expected non-zero
+
+        // time increment
+        double delta_t = (wheel_odom_msg.header.stamp - previous_w_odom_stamp).toSec();
+
+
+        // ... so the position increment is:
+        new_position = current_position + delta_t * velocity_in_world;
+
+
+        // update the current position and linear velocity
+        current_position = new_position;
+        current_linear_vel = tf::Vector3(wheel_odom_msg.twist.twist.linear.x,
+                                         wheel_odom_msg.twist.twist.linear.y,
+                                         wheel_odom_msg.twist.twist.linear.z);
+
     }
 
     /*
@@ -199,9 +227,9 @@ int main(int argc, char **argv) {
     }
 
     // Quaternion for Magnetic North correction
-    //if (!pn.getParam("mag_north_correction_yaw", mag_north_correction_yaw_)) {
-    //    ROS_WARN("Parameter mag_north_correction_yaw is not a double, setting default 0 radians");
-    //}
+    if (!pn.getParam("mag_north_correction_yaw", mag_north_correction_yaw_)) {
+        ROS_WARN("Parameter mag_north_correction_yaw is not a double, setting default 0 radians");
+    }
 
 
     // Evaluate alignment quternion
@@ -210,9 +238,9 @@ int main(int argc, char **argv) {
                           imu_alignment_rpy_[2]);
 
     // Evaluate nag. north corr. quternion
-    //mag_north_correction_.setRPY(0.0,
-    //0.0,
-    //                             mag_north_correction_yaw_);
+    mag_north_correction_.setRPY(0.0,
+                                 0.0,
+                                 mag_north_correction_yaw_);
 
     // Prepare the transform, set the origin to zero
     tfB_ = new tf::TransformBroadcaster();
@@ -244,7 +272,7 @@ int main(int argc, char **argv) {
 
 
     // Subscribe the IMU and start the loop
-    ros::Subscriber wheel_odom_subscriber = n.subscribe("gps_odom_topic", 10, wheelOdomMsgCallback);
+    ros::Subscriber wheel_odom_subscriber = n.subscribe("wheel_odom_topic", 10, wheelOdomMsgCallback);
     ros::Subscriber imu_subscriber = n.subscribe("imu_topic", 10, imuMsgCallback);
 
     ros::spin();

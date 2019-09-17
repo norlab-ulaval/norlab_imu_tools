@@ -1,0 +1,25 @@
+<!-- This launchfile runs our simple imu+wheel odometry for the warthog. It requires odometry messages from the wheels and the processed IMU attitude
+-->
+<launch>
+
+  <node pkg="norlab_imu_tools" type="imu_and_wheel_odom_node" name="imu_and_wheel_odom_node" output="screen">
+    <remap from="imu_topic" to="/MTI_imu/data" />
+    <remap from="wheel_odom_topic" to="/warthog_velocity_controller/odom" />
+    <param name="odom_frame" value="odom" />
+    <param name="base_frame" value="base_link" />
+    <param name="publish_translation" value="True" />
+
+    ## This rosparam allows you to set IMU alignment w.r.t. base_link
+    ## Values in RAD
+    <rosparam param="imu_alignment_rpy">[-3.14159265359, 0.0, 1.570796327]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
+    <param name="mag_north_correction_yaw" value="0.0" />
+
+
+    ## If odom message needed
+    <param name="publish_odom" value="True" />
+    <param name="odom_topic_name" value="imu_and_wheel_odom" />
+
+  </node>
+
+
+</launch>
