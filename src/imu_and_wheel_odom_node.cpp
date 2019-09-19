@@ -22,7 +22,7 @@ tf::StampedTransform transform_;
 tf::Quaternion tmp_;
 tf::Quaternion imu_alignment_;
 tf::Quaternion mag_north_correction_;
-//tf::Quaternion fixed_yaw_rotation_by_pi(0.0, 0.0, 1.0, 0);
+
 
 std::vector<double> imu_alignment_rpy_(3, 0.0);
 double mag_north_correction_yaw_ = 0;
@@ -39,14 +39,9 @@ tf::Vector3 current_linear_vel(0.0,0.0,0.0);
 
 bool initial_wheel_odom_received = false;
 ros::Time previous_w_odom_stamp;
+double p_wheel_odom_vx_scale = 1.0;
 
-//geometry_msgs::Pose initial_gps;
-//geometry_msgs::Pose last_heading_gps_pose;
-//bool first_fix_received = false;
 bool p_allow_translation = true;
-//bool p_apply_gps_heading_correction = false;
-//double p_gps_heading_correction_weight = 0.1;
-//double p_gps_heading_min_dist = 3;
 
 #ifndef TF_MATRIX3x3_H
 typedef btScalar tfScalar;
@@ -107,7 +102,7 @@ void wheelOdomMsgCallback(const nav_msgs::Odometry &wheel_odom_msg) {
 
 
         // express the velocity in the world frame
-        tf::Vector3 velocity_in_world = rotation_body_to_world * tf::Vector3(wheel_odom_msg.twist.twist.linear.x,
+        tf::Vector3 velocity_in_world = rotation_body_to_world * tf::Vector3(wheel_odom_msg.twist.twist.linear.x*p_wheel_odom_vx_scale,
                                                                              wheel_odom_msg.twist.twist.linear.y,
                                                                              wheel_odom_msg.twist.twist.linear.z);
                                                                              // for warthog, only x is expected non-zero
@@ -122,79 +117,11 @@ void wheelOdomMsgCallback(const nav_msgs::Odometry &wheel_odom_msg) {
 
         // update the current position and linear velocity
         current_position = new_position;
-        current_linear_vel = tf::Vector3(wheel_odom_msg.twist.twist.linear.x,
+        current_linear_vel = tf::Vector3(wheel_odom_msg.twist.twist.linear.x*p_wheel_odom_vx_scale,
                                          wheel_odom_msg.twist.twist.linear.y,
                                          wheel_odom_msg.twist.twist.linear.z);
 
     }
-
-    /*
-    // use the pose to estimate heading, if asked for
-    if(p_apply_gps_heading_correction){
-        std::stringstream debug;
-        double current_gps_heading = 0;
-        double dist_since_last_pose = sqrt(
-                pow(current_pose.position.x-last_heading_gps_pose.position.x,2) +
-                pow(current_pose.position.y-last_heading_gps_pose.position.y,2)
-                );
-        if (dist_since_last_pose>=p_gps_heading_min_dist){
-            current_gps_heading = atan2(current_pose.position.y - last_heading_gps_pose.position.y,
-                                        current_pose.position.x - last_heading_gps_pose.position.x);
-
-
-            tfScalar yaw_imu, pitch_imu, roll_imu;
-            tf::Matrix3x3 mat(tmp_);
-            mat.getEulerYPR(yaw_imu, pitch_imu, roll_imu);
-
-            tf::Quaternion attitude_by_gps;
-            attitude_by_gps.setRPY(roll_imu, pitch_imu, (tfScalar) current_gps_heading );
-
-            // For skidoo: we are actually moving backwards, so we need to rotate the attitude by 180 degs around z
-            attitude_by_gps = fixed_yaw_rotation_by_pi * attitude_by_gps;
-
-
-            // Difference quaternion between the imu and gps
-            tf::Quaternion heading_difference = attitude_by_gps * tmp_.inverse();
-
-            // Apply with weight
-            tfScalar yaw_correction_angle = heading_difference.getAngle();
-            tf::Vector3 yaw_correction_axis = heading_difference.getAxis();
-
-            if(yaw_correction_angle >= 3.14159265359){   //whoops, the quaternion 4*pi periodicidy problem...
-                heading_difference = heading_difference * -1;   //this is the same rotation, but the shorter direction
-                yaw_correction_angle = heading_difference.getAngle();
-                yaw_correction_axis = heading_difference.getAxis();
-            }
-
-            yaw_correction_axis.setX((tfScalar) 0.0);   // to prevent numerical error creeping in
-            yaw_correction_axis.setY((tfScalar) 0.0);
-
-
-            double yaw_correction_angle_weighted = yaw_correction_angle * p_gps_heading_correction_weight; // applying only a part of the rotation
-            heading_difference.setRotation(yaw_correction_axis, yaw_correction_angle_weighted);
-
-            mag_north_correction_ = heading_difference * mag_north_correction_;
-            mag_north_correction_.normalize();
-
-
-            // check the values
-            tfScalar yaw_mag_calib, pitch_mag_calib, roll_mag_calib;
-            mat = tf::Matrix3x3(mag_north_correction_);
-            mat.getEulerYPR(yaw_mag_calib, pitch_mag_calib, roll_mag_calib);
-
-            debug << "Current mag. correction Z rot.: " << yaw_mag_calib*180.0/3.1416 << "deg ("<< yaw_mag_calib <<
-                     "rad), current GPS-IMU yaw error: " << yaw_correction_angle*180.0/3.1416 << "deg("<< yaw_correction_angle
-                      << "rad).";
-            ROS_INFO(debug.str().c_str());
-            // end debug
-
-
-            // dont forget to remember the last pose
-            last_heading_gps_pose = current_pose;
-        }
-
-    }
-    */
 
     previous_w_odom_stamp = wheel_odom_msg.header.stamp;
 }
@@ -210,9 +137,7 @@ int main(int argc, char **argv) {
     pn.param("base_frame", p_base_frame_, std::string("base_link"));
     pn.param("publish_odom", p_publish_odom_, false);
     pn.param("publish_translation", p_allow_translation, true);
-    //pn.param("apply_gps_heading_correction", p_apply_gps_heading_correction, false);
-    //pn.param("gps_heading_correction_weight", p_gps_heading_correction_weight, 0.1);
-    //pn.param("gps_heading_min_dist", p_gps_heading_min_dist, 3.0);
+    pn.param("wheel_odom_velocity_scale_x", p_wheel_odom_vx_scale, 1.0);
     pn.param("odom_topic_name", p_odom_topic_name_, std::string("imu_odom"));
 
 

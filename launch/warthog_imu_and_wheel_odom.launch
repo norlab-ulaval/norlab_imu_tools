@@ -8,6 +8,9 @@
     <param name="odom_frame" value="odom" />
     <param name="base_frame" value="base_link" />
     <param name="publish_translation" value="True" />
+    <param name="wheel_odom_velocity_scale_x" value="0.95" />
+
+
 
     ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## Values in RAD
