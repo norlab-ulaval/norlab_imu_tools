@@ -11,6 +11,7 @@
 #include <cmath>
 #include <sstream>
 
+#define MISSED_ODOM_MSG_SAFETY_MULTIPLIER 6.0
 
 // frame names
 std::string p_odom_frame_;
@@ -20,8 +21,10 @@ std::string p_base_frame_;
 tf::TransformBroadcaster *tfB_;
 tf::StampedTransform transform_;
 tf::Quaternion tmp_;
+tf::Quaternion current_attitude;
 tf::Quaternion imu_alignment_;
 tf::Quaternion mag_north_correction_;
+
 
 
 std::vector<double> imu_alignment_rpy_(3, 0.0);
@@ -40,6 +43,7 @@ tf::Vector3 current_linear_vel(0.0,0.0,0.0);
 bool initial_wheel_odom_received = false;
 ros::Time previous_w_odom_stamp;
 double p_wheel_odom_vx_scale = 1.0;
+double p_longest_expected_input_odom_period = MISSED_ODOM_MSG_SAFETY_MULTIPLIER/20.0;
 
 bool p_allow_translation = true;
 
@@ -52,10 +56,17 @@ namespace tf { typedef btMatrix3x3 Matrix3x3; }
 void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
     tf::quaternionMsgToTF(imu_msg.orientation, tmp_);
 
+    if (std::isnan(tmp_.getX()) || std::isnan(tmp_.getY()) || std::isnan(tmp_.getZ()) || std::isnan(tmp_.getW()))
+    {
+        ROS_WARN("Received IMU message with NaN values, dropping");
+        return;
+    }
+
     tmp_ = mag_north_correction_ * tmp_ * imu_alignment_;
     tmp_.normalize();
 
-    transform_.setRotation(tmp_);
+    current_attitude = tmp_;
+    transform_.setRotation(current_attitude);
     transform_.setOrigin(tf::Vector3(current_position.x(),current_position.y(),current_position.z()));
     transform_.stamp_ = imu_msg.header.stamp;
 
@@ -63,7 +74,7 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
 
     if (p_publish_odom_) {
         geometry_msgs::Quaternion quat_msg;
-        tf::quaternionTFToMsg(tmp_, quat_msg);
+        tf::quaternionTFToMsg(current_attitude, quat_msg);
         odom_msg_.pose.pose.orientation = quat_msg;
 
         odom_msg_.pose.pose.position.x = current_position.x();
@@ -81,9 +92,17 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
 
 void wheelOdomMsgCallback(const nav_msgs::Odometry &wheel_odom_msg) {
 
-    //
+    //prepare variables
     tf::Vector3 new_position;
 
+    //check for nonsense data
+    if(std::isnan(wheel_odom_msg.twist.twist.linear.x) ||
+       std::isnan(wheel_odom_msg.twist.twist.linear.y) ||
+       std::isnan(wheel_odom_msg.twist.twist.linear.z))
+    {
+        ROS_WARN("Received Wheel Odometry message with NaN values, dropping");
+        return;
+    }
 
     // to know our delta time step, we need the previous time stamp. The first odom message is used to initialize it
     if (!initial_wheel_odom_received){
@@ -98,7 +117,7 @@ void wheelOdomMsgCallback(const nav_msgs::Odometry &wheel_odom_msg) {
         // body to world rotation
         tf::Transform rotation_body_to_world;
         rotation_body_to_world.setOrigin( tf::Vector3(0.0, 0.0, 0.0) );      // no translation
-        rotation_body_to_world.setRotation( tmp_ );                          // current orientation
+        rotation_body_to_world.setRotation( current_attitude );                          // current orientation
 
 
         // express the velocity in the world frame
@@ -109,6 +128,19 @@ void wheelOdomMsgCallback(const nav_msgs::Odometry &wheel_odom_msg) {
 
         // time increment
         double delta_t = (wheel_odom_msg.header.stamp - previous_w_odom_stamp).toSec();
+
+        if (delta_t <= 0.0){
+            ROS_WARN("Received wheel odometry message with negative or zero time increment, ignoring that one and starting from the next one.");
+            initial_wheel_odom_received = false;
+            return;
+        }
+
+        if (delta_t >= p_longest_expected_input_odom_period){
+            ROS_WARN("Received wheel odometry message with too much delay after the previous one. Ignoring that and starting from new.");
+            initial_wheel_odom_received = false;
+            return;
+        }
+
 
 
         // ... so the position increment is:
@@ -131,6 +163,7 @@ int main(int argc, char **argv) {
 
     ros::NodeHandle n;
     ros::NodeHandle pn("~");
+    double p_wheel_odom_expected_rate = 20.0;
 
     // Load params
     pn.param("odom_frame", p_odom_frame_, std::string("odom"));
@@ -139,7 +172,13 @@ int main(int argc, char **argv) {
     pn.param("publish_translation", p_allow_translation, true);
     pn.param("wheel_odom_velocity_scale_x", p_wheel_odom_vx_scale, 1.0);
     pn.param("odom_topic_name", p_odom_topic_name_, std::string("imu_odom"));
+    pn.param("wheel_odom_expected_rate", p_wheel_odom_expected_rate, 20.0);
 
+    if(p_wheel_odom_expected_rate<=0)
+    {
+        throw "Zero or negative rate for wheel odometry is a nonsense.";
+    }
+    p_longest_expected_input_odom_period = (1.0*MISSED_ODOM_MSG_SAFETY_MULTIPLIER)/p_wheel_odom_expected_rate;
 
     // Quaternion for IMU alignment
     if (!pn.getParam("imu_alignment_rpy", imu_alignment_rpy_)) {
@@ -166,6 +205,9 @@ int main(int argc, char **argv) {
     mag_north_correction_.setRPY(0.0,
                                  0.0,
                                  mag_north_correction_yaw_);
+
+    // Initialize the attitude
+    current_attitude.setRPY(0.0,0.0,0.0);
 
     // Prepare the transform, set the origin to zero
     tfB_ = new tf::TransformBroadcaster();
