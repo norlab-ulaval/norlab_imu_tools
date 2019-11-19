@@ -1,0 +1,40 @@
+<!-- IMU message attitude to TF relay (with the option to publish odom messages as well
+     Warning: Our IMU's typpicaly cannot estimate translation (except for the fancy MTi-G 
+     and similar with GPS. This relay fills the translation fields with zeros.
+-->
+<launch>
+  <node pkg="norlab_imu_tools" type="jfr2019_warthog_imu_and_fix_to_tf_node" name="jfr2019_warthog_imu_and_fix_to_tf_node" output="screen">
+    <remap from="imu_topic" to="/MTI_imu/data" />
+    <remap from="gps_odom_topic" to="/odom_utm" />
+    <param name="odom_frame" value="odom" />
+    <param name="base_frame" value="base_link" />
+    <param name="publish_gps_translation" value="True" />
+    <param name="apply_gps_heading_correction" value="True" />
+    <param name="gps_heading_correction_weight" value="0.1" />
+    <param name="gps_heading_min_dist" value="1.5" />
+
+
+    ## This rosparam allows you to set IMU alignment w.r.t. base_link
+    ## E.g. in our peli-case, the IMU is mounted upside-down, so set the RPY appropriately
+    ## Values in RAD 
+    <rosparam param="imu_alignment_rpy">[-3.14159265359, 0.0, 1.570796327]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
+    <param name="mag_north_correction_yaw" value="-2.00" /> <!-- 15.66 deg == 15°40'-->
+
+
+    ## If odom message needed (but keep in mind that only the orientation makes sense):
+    <param name="publish_odom" value="True" />
+    <param name="odom_topic_name" value="imu_odom" />
+
+  </node>
+
+
+  <node pkg="gps_common" type="utm_odometry_node" name="gps_to_umt_odom_node" output="screen">
+    <remap from="odom" to="odom_utm" />
+    <remap from="fix" to="/gps/fix_front" />
+    <param name="frame_id" value="gps_world" />
+    <param name="child_frame_id" value="gps_base_link" />
+
+  </node>
+ 
+
+</launch>
