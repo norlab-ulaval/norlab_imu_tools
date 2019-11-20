@@ -138,6 +138,7 @@ include_directories(
 add_executable(imu_attitude_to_tf_node src/imu_attitude_to_tf_node.cpp)
 add_executable(imu_and_fix_to_tf_node src/imu_attitude_and_fix_to_tf_node.cpp)
 add_executable(jfr2019_warthog_imu_and_fix_to_tf_node src/jfr2019_warthog_imu_attitude_and_fix_to_tf_node.cpp)
+add_executable(imu_bias_observer src/imu_bias_observer.cpp)
 #add_executable(gps_gyro_odom_to_tf_node src/gps_gyro_odom_to_tf.cpp)
 add_executable(imu_and_wheel_odom_node src/imu_and_wheel_odom_node.cpp)
 
@@ -161,6 +162,9 @@ target_link_libraries(imu_and_fix_to_tf_node
         ${catkin_LIBRARIES})
 
 target_link_libraries(jfr2019_warthog_imu_and_fix_to_tf_node
+        ${catkin_LIBRARIES})
+
+target_link_libraries(imu_bias_observer
         ${catkin_LIBRARIES})
 
 #target_link_libraries(gps_gyro_odom_to_tf_node
