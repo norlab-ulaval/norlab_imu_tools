@@ -20,14 +20,14 @@ int number_of_samples = 0;
 
 // params stuff
 ros::Publisher *bias_pub;
-double observation_time = 15.0;
-ros::Time observation_start;
+int target_observation_samples = 4000;
 bool observe_now = false;
+
 
 void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
     if(observe_now)
     {
-        if((ros::Time::now() - observation_start).toSec() <= observation_time)
+        if(number_of_samples <= target_observation_samples)
         {
             angular_velocity_sum_x += imu_msg.angular_velocity.x;
             angular_velocity_sum_y += imu_msg.angular_velocity.y;
@@ -35,16 +35,18 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
             number_of_samples += 1;
         }
         else
-            {
-                geometry_msgs::Vector3Stamped bias_msg;
-                bias_msg.header.stamp = ros::Time::now();
-                bias_msg.vector.x = angular_velocity_sum_x / double(number_of_samples);
-                bias_msg.vector.y = angular_velocity_sum_y / double(number_of_samples);
-                bias_msg.vector.z = angular_velocity_sum_z / double(number_of_samples);
-                (*bias_pub).publish(bias_msg);
+        {
+            geometry_msgs::Vector3Stamped bias_msg;
+            bias_msg.header.stamp = ros::Time::now();
+            bias_msg.vector.x = angular_velocity_sum_x / double(number_of_samples);
+            bias_msg.vector.y = angular_velocity_sum_y / double(number_of_samples);
+            bias_msg.vector.z = angular_velocity_sum_z / double(number_of_samples);
+            (*bias_pub).publish(bias_msg);
 
-                observe_now = false;
-            }
+            observe_now = false;
+            ros::Duration(1.0).sleep();
+            ros::shutdown();
+        }
 
     }
 }
@@ -56,7 +58,7 @@ int main(int argc, char **argv) {
     ros::NodeHandle pn("~");
 
     // Load params
-    pn.param("observation_time", observation_time, 15.0);
+    pn.param("target_observation_samples", target_observation_samples, 4000);
 
     // Subscribe the IMU and start the loop
     ros::Subscriber imu_subscriber = n.subscribe("imu_topic_in", 10, imuMsgCallback);
@@ -64,10 +66,7 @@ int main(int argc, char **argv) {
     bias_pub = new ros::Publisher(n.advertise<geometry_msgs::Vector3Stamped>("bias_topic_out", 10));
 
     //give the subscriber time to contact the publisher
-    ros::Duration(1.0).sleep();
-    observation_start = ros::Time::now();
     observe_now = true;
-
     ros::spin();
 
     return 0;

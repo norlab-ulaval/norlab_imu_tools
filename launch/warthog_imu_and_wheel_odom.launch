@@ -27,7 +27,7 @@
   <node pkg="norlab_imu_tools" type="imu_bias_observer" name="imu_bias_observer" output="screen">
     <remap from="imu_topic_in" to="/MTI_imu/data_raw" />
     <remap from="bias_topic_out" to="/madgwick_filter/bias" />
-    <param name="observation_time" value="15.0" />
+    <param name="target_observation_samples" value="4000" />
   </node>
 
 
