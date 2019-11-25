@@ -12,13 +12,22 @@
     <param name="apply_gps_heading_correction" value="True" />
     <param name="gps_heading_correction_weight" value="0.1" />
     <param name="gps_heading_min_dist" value="1.5" />
+    <param name="gps_heading_max_possible_correction" value="1.57" />
+
+
 
 
     ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## E.g. in our peli-case, the IMU is mounted upside-down, so set the RPY appropriately
     ## Values in RAD 
     <rosparam param="imu_alignment_rpy">[-3.14159265359, 0.0, 1.570796327]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
-    <param name="mag_north_correction_yaw" value="-2.00" /> <!-- 15.66 deg == 15°40'-->
+    <param name="mag_north_correction_yaw" value="0.0234423" /> <!-- 15.66 deg == 15°40'       -1.32197-->
+    
+    ## mag_north_correction_yaw 
+    ## filtered_2019-11-23-11-41-53_rs32_pouliot_vachon.renamed.renamed.bag:   value="-1.26"
+    ## filtered_2019-11-23-11-58-10_rs32_vachon_pouliot.renamed.renamed.bag:   value="0.54"
+
+	
 
 
     ## If odom message needed (but keep in mind that only the orientation makes sense):
@@ -30,7 +39,7 @@
 
   <node pkg="gps_common" type="utm_odometry_node" name="gps_to_umt_odom_node" output="screen">
     <remap from="odom" to="odom_utm" />
-    <remap from="fix" to="/gps/fix_front" />
+    <remap from="fix" to="/post_fix_front" />
     <param name="frame_id" value="gps_world" />
     <param name="child_frame_id" value="gps_base_link" />
 

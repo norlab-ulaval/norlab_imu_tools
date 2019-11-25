@@ -50,7 +50,7 @@ tf::StampedTransform transform_;
 tf::Quaternion tmp_;
 tf::Quaternion imu_alignment_;
 tf::Quaternion mag_north_correction_;
-tf::Quaternion fixed_yaw_rotation_by_pi(0.0, 0.0, 1.0, 0);
+//tf::Quaternion fixed_yaw_rotation_by_pi(0.0, 0.0, 1.0, 0);
 
 std::vector<double> imu_alignment_rpy_(3, 0.0);
 double mag_north_correction_yaw_ = 0;
@@ -70,6 +70,9 @@ bool p_publish_gps_translation = true;
 bool p_apply_gps_heading_correction = false;
 double p_gps_heading_correction_weight = 0.1;
 double p_gps_heading_min_dist = 3;
+double p_gps_heading_max_correction = 1.570796327; // 90 degrees
+
+
 
 #ifndef TF_MATRIX3x3_H
 typedef btScalar tfScalar;
@@ -153,7 +156,7 @@ void fixMsgCallback(const nav_msgs::Odometry &gps_odom_msg) {
             tfScalar yaw_correction_angle = heading_difference.getAngle();
             tf::Vector3 yaw_correction_axis = heading_difference.getAxis();
 
-            if(yaw_correction_angle >= 3.14159265359){   //whoops, the quaternion 4*pi periodicidy problem...
+            if(abs(yaw_correction_angle) >= 3.14159265359){   //whoops, the quaternion 4*pi periodicidy problem...
                 heading_difference = heading_difference * -1;   //this is the same rotation, but the shorter direction
                 yaw_correction_angle = heading_difference.getAngle();
                 yaw_correction_axis = heading_difference.getAxis();
@@ -163,24 +166,37 @@ void fixMsgCallback(const nav_msgs::Odometry &gps_odom_msg) {
             yaw_correction_axis.setY((tfScalar) 0.0);
 
 
-            double yaw_correction_angle_weighted = yaw_correction_angle * p_gps_heading_correction_weight; // applying only a part of the rotation
-            heading_difference.setRotation(yaw_correction_axis, yaw_correction_angle_weighted);
+            if (abs(yaw_correction_angle) > p_gps_heading_max_correction)
+            {
+                debug << "Current GPS-IMU yaw error: " << yaw_correction_angle*180.0/3.1416 << "deg("<< yaw_correction_angle
+                      << "rad) is larger than maximum allowed. That indicates some GPS nonsense (going backwards?). Skipping.";
+                ROS_INFO(debug.str().c_str());
 
-            mag_north_correction_ = heading_difference * mag_north_correction_;
-            mag_north_correction_.normalize();
+
+            } else {
 
 
-            // check the values
-            tfScalar yaw_mag_calib, pitch_mag_calib, roll_mag_calib;
-            mat = tf::Matrix3x3(mag_north_correction_);
-            mat.getEulerYPR(yaw_mag_calib, pitch_mag_calib, roll_mag_calib);
+                double yaw_correction_angle_weighted =
+                        yaw_correction_angle * p_gps_heading_correction_weight; // applying only a part of the rotation
+                heading_difference.setRotation(yaw_correction_axis, yaw_correction_angle_weighted);
 
-            debug << "Current mag. correction Z rot.: " << yaw_mag_calib*180.0/3.1416 << "deg ("<< yaw_mag_calib <<
-                     "rad), current GPS-IMU yaw error: " << yaw_correction_angle*180.0/3.1416 << "deg("<< yaw_correction_angle
+                mag_north_correction_ = heading_difference * mag_north_correction_;
+                mag_north_correction_.normalize();
+
+
+                // check the values
+                tfScalar yaw_mag_calib, pitch_mag_calib, roll_mag_calib;
+                mat = tf::Matrix3x3(mag_north_correction_);
+                mat.getEulerYPR(yaw_mag_calib, pitch_mag_calib, roll_mag_calib);
+
+                debug << "Current mag. correction Z rot.: " << yaw_mag_calib * 180.0 / 3.1416 << "deg ("
+                      << yaw_mag_calib <<
+                      "rad), current GPS-IMU yaw error: " << yaw_correction_angle * 180.0 / 3.1416 << "deg("
+                      << yaw_correction_angle
                       << "rad).";
-            ROS_INFO(debug.str().c_str());
-            // end debug
-
+                ROS_INFO(debug.str().c_str());
+                // end debug
+            }
 
             // dont forget to remember the last pose
             last_heading_gps_pose = current_pose;
@@ -203,6 +219,9 @@ int main(int argc, char **argv) {
     pn.param("gps_heading_correction_weight", p_gps_heading_correction_weight, 0.1);
     pn.param("gps_heading_min_dist", p_gps_heading_min_dist, 3.0);
     pn.param("odom_topic_name", p_odom_topic_name_, std::string("imu_odom"));
+    pn.param("gps_heading_max_possible_correction", p_gps_heading_max_correction, 1.570796327);
+
+
 
 
     // Quaternion for IMU alignment
