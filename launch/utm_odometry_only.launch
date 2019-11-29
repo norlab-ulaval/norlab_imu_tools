@@ -1,0 +1,8 @@
+<launch>
+  <node pkg="gps_common" type="utm_odometry_node" name="gps_to_umt_odom_node" output="screen">
+    <remap from="odom" to="odom_utm" />
+    <remap from="fix" to="/post_fix_front" />
+    <param name="frame_id" value="gps_world" />
+    <param name="child_frame_id" value="gps_base_link" />
+  </node>
+</launch>
