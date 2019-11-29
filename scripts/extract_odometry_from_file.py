@@ -1,6 +1,16 @@
 import rosbag
 from Tkinter import Tk
 from tkFileDialog import askopenfilenames
+import math
+from scipy.spatial.transform import Rotation as R
+import numpy as np
+
+
+map_rotation_for_north_alignment = 128.09 * math.pi / 180.0
+name_of_icp_odom_topic = "/icp_odom"
+name_of_udm_odom_topic = "/odom_utm"
+name_of_proprio_odom = "/imu_and_wheel_odom"
+map_rotation = R.from_euler('z', map_rotation_for_north_alignment)
 
 def get_filename_from_user():
     root = Tk()
@@ -31,31 +41,56 @@ for bag_filename in bag_filenames:
     icp_mapUp_stats_file = open('/'.join(bag_filename.split('/')[0:-1]) + '/' + bag_filename_stripped + '_icp_mapUpStats.csv', 'w')
     #measurement_joy_trigger_file = open('/'.join(bag_filename.split('/')[0:-1])+'/'+bag_filename_stripped+'_joy.csv', 'w')
 
-    for topic, msg, t in bag.read_messages(topics=['/odom_utm', '/icp_odom', '/imu_odom', '/icp_map_iteration_statistics', '/icp_match_iteration_statistics']):
-        if topic == '/icp_odom':
+    for topic, msg, t in bag.read_messages(topics=[name_of_udm_odom_topic,
+                                                   name_of_icp_odom_topic,
+                                                   name_of_proprio_odom,
+                                                   '/icp_map_iteration_statistics',
+                                                   '/icp_match_iteration_statistics']):
+        if topic == name_of_icp_odom_topic:
+            position = np.array([msg.pose.pose.position.x,
+                                 msg.pose.pose.position.y,
+                                 msg.pose.pose.position.z])
+            attitude = R.from_quat([msg.pose.pose.orientation.x,
+                                    msg.pose.pose.orientation.y,
+                                    msg.pose.pose.orientation.z,
+                                    msg.pose.pose.orientation.w])
+
+            rot_pos = map_rotation.apply(position)
+            rot_quat = (attitude*map_rotation).as_quat()
+
             icp_odom_file.write('{0},{1:09d},{2},{3},{4},{5},{6},{7},{8}\n'.format(msg.header.stamp.secs,
                                                                    msg.header.stamp.nsecs,
-                                                                   msg.pose.pose.position.x,
-                                                                   msg.pose.pose.position.y,
-                                                                   msg.pose.pose.position.z,
-                                                                   msg.pose.pose.orientation.x,
-                                                                   msg.pose.pose.orientation.y,
-                                                                   msg.pose.pose.orientation.z,
-                                                                   msg.pose.pose.orientation.w))
-	elif topic == '/imu_odom':
+                                                                   rot_pos[0],
+                                                                   rot_pos[1],
+                                                                   rot_pos[2],
+                                                                   rot_quat[0],
+                                                                   rot_quat[1],
+                                                                   rot_quat[2],
+                                                                   rot_quat[3]))
+        elif topic == name_of_proprio_odom:
+            position = np.array([msg.pose.pose.position.x,
+                                 msg.pose.pose.position.y,
+                                 msg.pose.pose.position.z])
+            attitude = R.from_quat([msg.pose.pose.orientation.x,
+                                    msg.pose.pose.orientation.y,
+                                    msg.pose.pose.orientation.z,
+                                    msg.pose.pose.orientation.w])
+
+            rot_pos = map_rotation.apply(position)
+            rot_quat = (attitude * map_rotation).as_quat()
+
             imu_odom_file.write('{0},{1:09d},{2},{3},{4},{5},{6},{7},{8}\n'.format(msg.header.stamp.secs,
                                                                    msg.header.stamp.nsecs,
-                                                                   msg.pose.pose.position.x,
-                                                                   msg.pose.pose.position.y,
-                                                                   msg.pose.pose.position.z,
-                                                                   msg.pose.pose.orientation.x,
-                                                                   msg.pose.pose.orientation.y,
-                                                                   msg.pose.pose.orientation.z,
-                                                                   msg.pose.pose.orientation.w))
+                                                                   rot_pos[0],
+                                                                   rot_pos[1],
+                                                                   rot_pos[2],
+                                                                   rot_quat[0],
+                                                                   rot_quat[1],
+                                                                   rot_quat[2],
+                                                                   rot_quat[3]))
 
 
-
-        elif topic == '/odom_utm':
+        elif topic == name_of_udm_odom_topic:
             utm_odom_file.write('{0},{1:09d},{2},{3},{4},{5},{6},{7},{8}\n'.format(msg.header.stamp.secs,
                                                                    msg.header.stamp.nsecs,
                                                                    msg.pose.pose.position.x,
