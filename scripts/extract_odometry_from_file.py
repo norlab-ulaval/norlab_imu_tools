@@ -10,7 +10,21 @@ map_rotation_for_north_alignment = 128.09 * math.pi / 180.0
 name_of_icp_odom_topic = "/icp_odom"
 name_of_udm_odom_topic = "/odom_utm"
 name_of_proprio_odom = "/imu_and_wheel_odom"
-map_rotation = R.from_euler('z', map_rotation_for_north_alignment)
+rotate_icp_odom = False
+rotate_imu_odom = True
+
+
+if rotate_icp_odom:
+    icp_odom_rotation = R.from_euler('z', map_rotation_for_north_alignment)
+else:
+    icp_odom_rotation = R.from_euler('z', 0.0)
+
+if rotate_imu_odom:
+    imu_odom_rotation = R.from_euler('z', map_rotation_for_north_alignment)
+else:
+    imu_odom_rotation = R.from_euler('z', 0.0)
+
+
 
 def get_filename_from_user():
     root = Tk()
@@ -55,8 +69,8 @@ for bag_filename in bag_filenames:
                                     msg.pose.pose.orientation.z,
                                     msg.pose.pose.orientation.w])
 
-            rot_pos = map_rotation.apply(position)
-            rot_quat = (attitude*map_rotation).as_quat()
+            rot_pos = icp_odom_rotation.apply(position)
+            rot_quat = (attitude*icp_odom_rotation).as_quat()
 
             icp_odom_file.write('{0},{1:09d},{2},{3},{4},{5},{6},{7},{8}\n'.format(msg.header.stamp.secs,
                                                                    msg.header.stamp.nsecs,
@@ -76,8 +90,8 @@ for bag_filename in bag_filenames:
                                     msg.pose.pose.orientation.z,
                                     msg.pose.pose.orientation.w])
 
-            rot_pos = map_rotation.apply(position)
-            rot_quat = (attitude * map_rotation).as_quat()
+            rot_pos = imu_odom_rotation.apply(position)
+            rot_quat = (attitude * imu_odom_rotation).as_quat()
 
             imu_odom_file.write('{0},{1:09d},{2},{3},{4},{5},{6},{7},{8}\n'.format(msg.header.stamp.secs,
                                                                    msg.header.stamp.nsecs,
