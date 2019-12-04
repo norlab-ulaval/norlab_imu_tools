@@ -6,7 +6,7 @@ from scipy.spatial.transform import Rotation as R
 import numpy as np
 
 
-map_rotation_for_north_alignment = 128.09 * math.pi / 180.0
+map_rotation_for_north_alignment = 132.927 * math.pi / 180.0
 name_of_icp_odom_topic = "/icp_odom"
 name_of_udm_odom_topic = "/odom_utm"
 name_of_proprio_odom = "/imu_and_wheel_odom"
