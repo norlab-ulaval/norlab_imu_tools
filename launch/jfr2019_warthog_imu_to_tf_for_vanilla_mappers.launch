@@ -15,13 +15,11 @@
     <param name="gps_heading_max_possible_correction" value="1.57" />
 
 
-
-
     ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## E.g. in our peli-case, the IMU is mounted upside-down, so set the RPY appropriately
     ## Values in RAD 
     <rosparam param="imu_alignment_rpy">[-3.14159265359, 0.0, 1.570796327]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
-    <param name="mag_north_correction_yaw" value="-2.37" /> <!-- 15.66 deg == 15°40'  -->
+    <param name="mag_north_correction_yaw" value="-2.58199" /> <!-- 15.66 deg == 15°40'  -->
     
     ## mag_north_correction_yaw - initial settings for different bagfiles 
     ## filtered_2019-11-23-11-41-53_rs32_pouliot_vachon.renamed.renamed.bag:   value="-1.26"
@@ -29,7 +27,7 @@
     ## filtered_2019-11-23-12-15-07_rs16_pouliot_vachon.renamed.renamed.bag:   value="0.04"
     ## filtered_2019-11-23-12-32-08_rs16_vachon_pouliot.renamed.renamed.bag:   value="1.08"
     ## filtered_2019-11-23-12-44-58_rs16_middle_on_the_snow.renamed.renamed.bag: value="-2.37"  
-
+    ## filtered_2020-01-10-10-52-53_around_pouliot_and_vachon.renamed.renamed.bag: value="3.79661472"
 
     ## If odom message needed (but keep in mind that only the orientation makes sense):
     <param name="publish_odom" value="True" />
