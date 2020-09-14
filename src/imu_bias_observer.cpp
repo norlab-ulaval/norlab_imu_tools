@@ -33,6 +33,11 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
             angular_velocity_sum_y += imu_msg.angular_velocity.y;
             angular_velocity_sum_z += imu_msg.angular_velocity.z;
             number_of_samples += 1;
+            
+            if(number_of_samples % (target_observation_samples/5) == 0){
+                ROS_INFO("IMU bias observer: Collected %d samples (%d\%) of %d.",number_of_samples, (100*number_of_samples/target_observation_samples), target_observation_samples);            
+            }
+
         }
         else
         {
@@ -44,6 +49,7 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
             (*bias_pub).publish(bias_msg);
 
             observe_now = false;
+            ROS_INFO("IMU bias observer: Done, publishing the result and shutting down.");
             ros::Duration(1.0).sleep();
             ros::shutdown();
         }
