@@ -3,8 +3,8 @@
 <launch>
 
   <node pkg="norlab_imu_tools" type="imu_and_wheel_odom_node" name="imu_and_wheel_odom_node" output="screen">
-    <remap from="imu_topic" to="/MTI_imu/data" />
-    <remap from="wheel_odom_topic" to="/warthog_velocity_controller/odom" />
+    <remap from="imu_topic" to="/imu/data" />
+    <remap from="wheel_odom_topic" to="/husky_velocity_controller/odom" />
     <param name="odom_frame" value="odom" />
     <param name="base_frame" value="base_link" />
     <param name="publish_translation" value="True" />
@@ -14,14 +14,21 @@
 
     ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## Values in RAD
-    <rosparam param="imu_alignment_rpy">[-3.14159265359, 0.0, 1.570796327]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
+    <rosparam param="imu_alignment_rpy">[0.0, 1.570796327, 0.0]</rosparam>  <!--Pelicase box for skidoo, -3.14159265359 1.570796327 all angles in radians! -->
     <param name="mag_north_correction_yaw" value="0.0" />
 
 
     ## If odom message needed
     <param name="publish_odom" value="True" />
-    <param name="odom_topic_name" value="imu_and_wheel_odom" />
+    <param name="odom_topic_name" value="imu_odom" />
 
   </node>
+
+  <node pkg="norlab_imu_tools" type="imu_bias_observer" name="imu_bias_observer" output="screen">
+    <remap from="imu_topic_in" to="/MTI_imu/data_raw" />
+    <remap from="bias_topic_out" to="/madgwick_filter/bias" />
+    <param name="target_observation_samples" value="4000" />
+  </node>
+
 
 </launch>

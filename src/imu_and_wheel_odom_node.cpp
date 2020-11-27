@@ -129,7 +129,7 @@ void wheelOdomMsgCallback(const nav_msgs::Odometry &wheel_odom_msg) {
         // time increment
         double delta_t = (wheel_odom_msg.header.stamp - previous_w_odom_stamp).toSec();
 
-        if (delta_t <= 0.0){
+        if (delta_t < 1e-7){
             ROS_WARN("Received wheel odometry message with negative or zero time increment, ignoring that one and starting from the next one.");
             initial_wheel_odom_received = false;
             return;
