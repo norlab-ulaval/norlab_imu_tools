@@ -4,6 +4,7 @@
 
 #include "ros/ros.h"
 #include "tf/transform_broadcaster.h"
+#include "tf/transform_listener.h"
 #include "sensor_msgs/Imu.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/Quaternion.h"
@@ -16,6 +17,7 @@
 // frame names
 std::string p_odom_frame_;
 std::string p_base_frame_;
+std::string p_imu_frame_;
 
 // tf stuff
 tf::TransformBroadcaster *tfB_;
@@ -23,11 +25,12 @@ tf::StampedTransform transform_;
 tf::Quaternion tmp_;
 tf::Quaternion current_attitude;
 tf::Quaternion imu_alignment_;
+tf::Quaternion imu_alignment_correction_;
 tf::Quaternion mag_north_correction_;
 
 
 
-std::vector<double> imu_alignment_rpy_(3, 0.0);
+std::vector<double> imu_correction_rpy_(3, 0.0);
 double mag_north_correction_yaw_ = 0;
 
 // output odom stuff
@@ -62,7 +65,7 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
         return;
     }
 
-    tmp_ = mag_north_correction_ * tmp_ * imu_alignment_;
+    tmp_ = mag_north_correction_ * tmp_ * imu_alignment_correction_ * imu_alignment_;
     tmp_.normalize();
 
     current_attitude = tmp_;
@@ -168,6 +171,7 @@ int main(int argc, char **argv) {
     // Load params
     pn.param("odom_frame", p_odom_frame_, std::string("odom"));
     pn.param("base_frame", p_base_frame_, std::string("base_link"));
+	pn.param("imu_frame", p_imu_frame_, std::string("imu"));
     pn.param("publish_odom", p_publish_odom_, false);
     pn.param("publish_translation", p_allow_translation, true);
     pn.param("wheel_odom_velocity_scale_x", p_wheel_odom_vx_scale, 1.0);
@@ -181,12 +185,12 @@ int main(int argc, char **argv) {
     p_longest_expected_input_odom_period = (1.0*MISSED_ODOM_MSG_SAFETY_MULTIPLIER)/p_wheel_odom_expected_rate;
 
     // Quaternion for IMU alignment
-    if (!pn.getParam("imu_alignment_rpy", imu_alignment_rpy_)) {
-        ROS_WARN("Parameter imu_alignment_rpy is not a list of three numbers, setting default 0,0,0");
+    if (!pn.getParam("imu_correction_rpy", imu_correction_rpy_)) {
+        ROS_WARN("Parameter imu_correction_rpy is not a list of three numbers, setting default 0,0,0");
     } else {
-        if (imu_alignment_rpy_.size() != 3) {
-            ROS_WARN("Parameter imu_alignment_rpy is not a list of three numbers, setting default 0,0,0");
-            imu_alignment_rpy_.assign(3, 0.0);
+        if (imu_correction_rpy_.size() != 3) {
+            ROS_WARN("Parameter imu_correction_rpy is not a list of three numbers, setting default 0,0,0");
+            imu_correction_rpy_.assign(3, 0.0);
         }
     }
 
@@ -195,11 +199,25 @@ int main(int argc, char **argv) {
         ROS_WARN("Parameter mag_north_correction_yaw is not a double, setting default 0 radians");
     }
 
+	// Get IMU->base_link tf
+	tf::TransformListener tf_listener;
+	tf::StampedTransform tf_imu_bl;
 
-    // Evaluate alignment quternion
-    imu_alignment_.setRPY(imu_alignment_rpy_[0],
-                          imu_alignment_rpy_[1],
-                          imu_alignment_rpy_[2]);
+	try {
+		tf_listener.waitForTransform(p_base_frame_, p_imu_frame_, ros::Time(0), ros::Duration(0.1));
+		tf_listener.lookupTransform(p_base_frame_, p_imu_frame_, ros::Time(0), tf_imu_bl);
+	} catch (tf::TransformException ex) {
+		ROS_ERROR("Unable to get tf between IMU and base_link (%s->%s): %s", p_imu_frame_.c_str(), p_base_frame_.c_str(), ex.what());
+		delete tfB_;
+		delete odom_pub_;
+		return 0;
+	}
+	imu_alignment_ = tf_imu_bl.getRotation();
+
+    // Evaluate alignment quaternion
+    imu_alignment_correction_.setRPY(imu_correction_rpy_[0],
+                          imu_correction_rpy_[1],
+                          imu_correction_rpy_[2]);
 
     // Evaluate nag. north corr. quternion
     mag_north_correction_.setRPY(0.0,
