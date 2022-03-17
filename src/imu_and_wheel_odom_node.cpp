@@ -31,6 +31,7 @@ tf::Quaternion mag_north_correction_;
 
 
 std::vector<double> imu_correction_rpy_(3, 0.0);
+std::vector<double> imu_alignment_rpy_(3, 0.0);
 double mag_north_correction_yaw_ = 0;
 
 // output odom stuff
@@ -184,37 +185,62 @@ int main(int argc, char **argv) {
     }
     p_longest_expected_input_odom_period = (1.0*MISSED_ODOM_MSG_SAFETY_MULTIPLIER)/p_wheel_odom_expected_rate;
 
-    // Quaternion for IMU alignment
-    if (!pn.getParam("imu_correction_rpy", imu_correction_rpy_)) {
-        ROS_WARN("Parameter imu_correction_rpy is not a list of three numbers, setting default 0,0,0");
-    } else {
-        if (imu_correction_rpy_.size() != 3) {
-            ROS_WARN("Parameter imu_correction_rpy is not a list of three numbers, setting default 0,0,0");
-            imu_correction_rpy_.assign(3, 0.0);
-        }
-    }
-
-    // Quaternion for Magnetic North correction
-    if (!pn.getParam("mag_north_correction_yaw", mag_north_correction_yaw_)) {
-        ROS_WARN("Parameter mag_north_correction_yaw is not a double, setting default 0 radians");
-    }
-
-	// Get IMU->base_link tf
-	tf::TransformListener tf_listener;
-	tf::StampedTransform tf_imu_bl;
-
-	try {
-		tf_listener.waitForTransform(p_base_frame_, p_imu_frame_, ros::Time(0), ros::Duration(0.1));
-		tf_listener.lookupTransform(p_base_frame_, p_imu_frame_, ros::Time(0), tf_imu_bl);
-	} catch (tf::TransformException ex) {
-		ROS_ERROR("Unable to get tf between IMU and base_link (%s->%s): %s", p_imu_frame_.c_str(), p_base_frame_.c_str(), ex.what());
-		delete tfB_;
-		delete odom_pub_;
-		return 0;
+	// Quaternion for Magnetic North correction
+	if (!pn.getParam("mag_north_correction_yaw", mag_north_correction_yaw_)) {
+		ROS_WARN("Parameter mag_north_correction_yaw is not a double, setting default 0 radians");
 	}
-	imu_alignment_ = tf_imu_bl.getRotation();
 
-    // Evaluate alignment quaternion
+    bool imu_alignment_set_;
+	// Quaternion for IMU alignment
+	if (pn.hasParam("imu_alignment_rpy")) {
+        imu_alignment_set_ = true;
+        ROS_WARN("Parameter imu_alignment_rpy is deprecated. Set correct IMU->base_link orientation in your URDF file and use imu_correction_rpy instead.");
+        if (!pn.getParam("imu_alignment_rpy", imu_alignment_rpy_)) {
+            ROS_WARN("Parameter imu_alignment_rpy is not a list of three numbers, setting default 0,0,0");
+        } else {
+            if (imu_alignment_rpy_.size() != 3) {
+                ROS_WARN("Parameter imu_alignment_rpy is not a list of three numbers, setting default 0,0,0");
+                imu_alignment_rpy_.assign(3, 0.0);
+            }
+        }
+    } else {
+        imu_alignment_set_ = false;
+    }
+
+	// Quaternion for IMU correction
+	if (!pn.getParam("imu_correction_rpy", imu_correction_rpy_))
+	{
+		ROS_WARN("Parameter imu_correction_rpy is not a list of three numbers, setting default 0,0,0");
+	} else	{
+		if (imu_correction_rpy_.size() != 3) {
+			ROS_WARN("Parameter imu_correction_rpy is not a list of three numbers, setting default 0,0,0");
+			imu_correction_rpy_.assign(3, 0.0);
+		}
+	}
+
+	// Get alignment quaternion
+	if (!imu_alignment_set_) {
+		// Get IMU->base_link tf
+		tf::TransformListener tf_listener(n);
+		tf::StampedTransform tf_imu_bl;
+
+		try {
+			tf_listener.waitForTransform(p_base_frame_, p_imu_frame_, ros::Time(0), ros::Duration(1.0));
+			tf_listener.lookupTransform(p_base_frame_, p_imu_frame_, ros::Time(0), tf_imu_bl);
+		} catch (tf::TransformException &ex) {
+			ROS_ERROR("Unable to get tf between IMU and base_link (%s->%s)", p_imu_frame_.c_str(), p_base_frame_.c_str());
+			delete tfB_;
+			delete odom_pub_;
+			throw;
+		}
+		imu_alignment_ = tf_imu_bl.getRotation();
+	} else {
+		imu_alignment_.setRPY(imu_alignment_rpy_[0],
+			imu_alignment_rpy_[1],
+			imu_alignment_rpy_[2]);
+	}
+
+    // Evaluate correction quaternion
     imu_alignment_correction_.setRPY(imu_correction_rpy_[0],
                           imu_correction_rpy_[1],
                           imu_correction_rpy_[2]);
