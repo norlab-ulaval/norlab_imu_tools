@@ -225,8 +225,8 @@ int main(int argc, char **argv) {
 		tf::StampedTransform tf_imu_bl;
 
 		try {
-			tf_listener.waitForTransform(p_base_frame_, p_imu_frame_, ros::Time(0), ros::Duration(1.0));
-			tf_listener.lookupTransform(p_base_frame_, p_imu_frame_, ros::Time(0), tf_imu_bl);
+			tf_listener.waitForTransform(p_imu_frame_, p_base_frame_, ros::Time(0), ros::Duration(1.0));
+			tf_listener.lookupTransform(p_imu_frame_, p_base_frame_, ros::Time(0), tf_imu_bl);
 		} catch (tf::TransformException &ex) {
 			ROS_ERROR("Unable to get tf between IMU and base_link (%s->%s)", p_imu_frame_.c_str(), p_base_frame_.c_str());
 			delete tfB_;
@@ -240,7 +240,7 @@ int main(int argc, char **argv) {
 			imu_alignment_rpy_[2]);
 	}
 
-    // Evaluate correction quaternion
+	// Evaluate correction quaternion
     imu_alignment_correction_.setRPY(imu_correction_rpy_[0],
                           imu_correction_rpy_[1],
                           imu_correction_rpy_[2]);
