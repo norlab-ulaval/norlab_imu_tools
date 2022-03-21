@@ -13,8 +13,8 @@ imu_attitude_to_tf node has to acknowledge Hector_slam: http://wiki.ros.org/hect
 <remap from="gps_odom_topic" to="/odom_utm" />    # UTM GPS coordinates input topic
 <param name="odom_frame" value="world" />         # Fixed odometry frame
 
-# Base link frame == IMU frame, orientation specified by the imu_alignment_rpy rosparam.
-<param name="base_frame" value="imu_link" />      
+# Base link frame
+<param name="base_frame" value="imu_link" />
 
 # If false, translation=0. If true, translation from GPS UTM, set to zero when launched
 <param name="publish_gps_translation" value="False" /> 
@@ -24,9 +24,9 @@ imu_attitude_to_tf node has to acknowledge Hector_slam: http://wiki.ros.org/hect
 <param name="gps_heading_correction_weight" value="0.1" /> # Filtering factor (1==full correction from GPS applied at each step. 0.1 recommended for smooth behavior)
 <param name="gps_heading_min_dist" value="1.5" /> # How long a GPS path segment should be for computing its tangent
 
-# Fixed rotation between the physical IMU and the base_link frame
+# Fixed rotation between the physical IMU and the base_link frame is taken from the static transform
 # Note that we neglect centrifugal acceleration, in skidoo, translation between IMU and Base link == 0
-<rosparam param="imu_alignment_rpy">[3.14159265359, 0.0, 3.14159265359]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
+<rosparam param="imu_correction_rpy">[0.0, 0.0, 0.0]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
 
 # Initial magnetic north correction angle. Note that this value is later precised by the GPS information
 <param name="mag_north_correction_yaw" value="0.27331833" /> <!-- 15.66 deg == 15°40'  => 0.27331833               0.43534373-->
