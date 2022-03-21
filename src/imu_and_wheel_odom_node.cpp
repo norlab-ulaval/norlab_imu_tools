@@ -17,7 +17,6 @@
 // frame names
 std::string p_odom_frame_;
 std::string p_base_frame_;
-std::string p_imu_frame_;
 
 // tf stuff
 tf::TransformBroadcaster *tfB_;
@@ -172,7 +171,6 @@ int main(int argc, char **argv) {
     // Load params
     pn.param("odom_frame", p_odom_frame_, std::string("odom"));
     pn.param("base_frame", p_base_frame_, std::string("base_link"));
-	pn.param("imu_frame", p_imu_frame_, std::string("imu"));
     pn.param("publish_odom", p_publish_odom_, false);
     pn.param("publish_translation", p_allow_translation, true);
     pn.param("wheel_odom_velocity_scale_x", p_wheel_odom_vx_scale, 1.0);
@@ -189,6 +187,15 @@ int main(int argc, char **argv) {
 	if (!pn.getParam("mag_north_correction_yaw", mag_north_correction_yaw_)) {
 		ROS_WARN("Parameter mag_north_correction_yaw is not a double, setting default 0 radians");
 	}
+
+	// get IMU frame_id
+	auto imu_msg_ptr = ros::topic::waitForMessage<sensor_msgs::Imu>("imu_topic", n, ros::Duration(1.0));
+	if (imu_msg_ptr == nullptr) {
+		delete tfB_;
+		delete odom_pub_;
+		throw ros::Exception("Unable to get IMU frame_id");
+	}
+	std::string imu_frame = imu_msg_ptr->header.frame_id;
 
     bool imu_alignment_set_;
 	// Quaternion for IMU alignment
@@ -225,10 +232,10 @@ int main(int argc, char **argv) {
 		tf::StampedTransform tf_imu_bl;
 
 		try {
-			tf_listener.waitForTransform(p_imu_frame_, p_base_frame_, ros::Time(0), ros::Duration(1.0));
-			tf_listener.lookupTransform(p_imu_frame_, p_base_frame_, ros::Time(0), tf_imu_bl);
+			tf_listener.waitForTransform(imu_frame, p_base_frame_, ros::Time(0), ros::Duration(1.0));
+			tf_listener.lookupTransform(imu_frame, p_base_frame_, ros::Time(0), tf_imu_bl);
 		} catch (tf::TransformException &ex) {
-			ROS_ERROR("Unable to get tf between IMU and base_link (%s->%s)", p_imu_frame_.c_str(), p_base_frame_.c_str());
+			ROS_ERROR("Unable to get tf between IMU and base_link (%s->%s)", imu_frame.c_str(), p_base_frame_.c_str());
 			delete tfB_;
 			delete odom_pub_;
 			throw;

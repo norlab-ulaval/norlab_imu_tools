@@ -43,7 +43,6 @@
 // frame names
 std::string p_odom_frame_;
 std::string p_base_frame_;
-std::string p_imu_frame_;
 
 // tf stuff
 std::unique_ptr<tf::TransformBroadcaster> tfB_;
@@ -109,7 +108,6 @@ int main(int argc, char **argv) {
   // Load params
   pn.param("odom_frame", p_odom_frame_, std::string("odom"));
   pn.param("base_frame", p_base_frame_, std::string("base_link"));
-  pn.param("imu_frame", p_imu_frame_, std::string("imu"));
   pn.param("publish_odom", p_publish_odom_, false);
   pn.param("odom_topic_name", p_odom_topic_name_, std::string("imu_odom"));
 
@@ -145,6 +143,15 @@ int main(int argc, char **argv) {
         }
     }
 
+	// get IMU frame_id
+	auto imu_msg_ptr = ros::topic::waitForMessage<sensor_msgs::Imu>("imu_topic", n, ros::Duration(1.0));
+	if (imu_msg_ptr == nullptr) {
+		ROS_ERROR("Unable to get IMU frame_id");
+		delete odom_pub_;
+		throw;
+	}
+	std::string imu_frame = imu_msg_ptr->header.frame_id;
+
     // Get alignment quaternion
     if (!imu_alignment_set_) {
         // Get IMU->base_link tf
@@ -152,12 +159,11 @@ int main(int argc, char **argv) {
         tf::StampedTransform tf_imu_bl;
 
         try {
-			tf_listener.waitForTransform(p_imu_frame_, p_base_frame_, ros::Time(0), ros::Duration(1.0));
-			tf_listener.lookupTransform(p_imu_frame_, p_base_frame_, ros::Time(0), tf_imu_bl);
+			tf_listener.waitForTransform(imu_frame, p_base_frame_, ros::Time(0), ros::Duration(1.0));
+			tf_listener.lookupTransform(imu_frame, p_base_frame_, ros::Time(0), tf_imu_bl);
         } catch (tf::TransformException &ex) {
-            ROS_ERROR("Unable to get tf between IMU and base_link (%s->%s)", p_imu_frame_.c_str(), p_base_frame_.c_str());
             delete odom_pub_;
-            throw;
+			throw ros::Exception("Unable to get IMU frame_id");
         }
         imu_alignment_ = tf_imu_bl.getRotation();
     } else {

@@ -14,10 +14,7 @@ imu_attitude_to_tf node has to acknowledge Hector_slam: http://wiki.ros.org/hect
 <param name="odom_frame" value="world" />         # Fixed odometry frame
 
 # Base link frame
-<param name="base_frame" value="imu_link" />      
-
-# IMU frame. IMU's orientation is acquired from the the imu->base_link tf, can be corrected with imu_correction_rpy rosparam.
-<param name="imu_frame" value="imu" />
+<param name="base_frame" value="imu_link" />
 
 # If false, translation=0. If true, translation from GPS UTM, set to zero when launched
 <param name="publish_gps_translation" value="False" /> 
