@@ -50,7 +50,11 @@ void imuMsgCallback(const sensor_msgs::Imu &imu_msg) {
 
             observe_now = false;
             ROS_INFO("IMU bias observer: Done, publishing the result and shutting down.");
+	    system("screen -XS init quit");
             ros::Duration(1.0).sleep();
+	    system("paplay $IMUREADY");
+	    ros::Duration(1.0).sleep();
+	    system("paplay $IDENTIFICATIONMESSAGE");
             ros::shutdown();
         }
 
