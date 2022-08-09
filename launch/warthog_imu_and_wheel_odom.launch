@@ -8,13 +8,13 @@
     <param name="odom_frame" value="odom" />
     <param name="base_frame" value="base_link" />
     <param name="publish_translation" value="True" />
-    <param name="wheel_odom_velocity_scale_x" value="0.95" />
+    <param name="wheel_odom_velocity_scale_x" value="0.95" /> <!-- wheels: 0.95 need to check this value --> <!-- tracks: 0.6332 -->
 
 
 
     ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## Values in RAD
-    <rosparam param="imu_alignment_rpy">[-3.14159265359, 0.0, 1.570796327]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
+    <rosparam param="imu_alignment_rpy">[0, 0, 0]</rosparam>  <!--Pelicase box for skidoo, all angles in radians! -->
     <param name="mag_north_correction_yaw" value="0.0" />
 
 
