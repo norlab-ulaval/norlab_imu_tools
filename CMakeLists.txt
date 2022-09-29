@@ -15,6 +15,9 @@ include_directories(
         ${norlab_imu_tools_INCLUDE_DIRS}
 )
 
+install(DIRECTORY launch
+        DESTINATION share/${PROJECT_NAME})
+
 add_executable(imu_bias_observer src/imu_bias_observer.cpp)
 ament_target_dependencies(imu_bias_observer
         rclcpp

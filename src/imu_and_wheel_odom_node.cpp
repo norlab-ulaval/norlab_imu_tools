@@ -71,7 +71,7 @@ public:
 
 
             this->declare_parameter<std::vector<double>>("imu_alignment_rpy", std::vector<double>(3, 0.0));
-            is_imu_alignement_set = this->get_parameter("imu_alignment_rpy", imu_alignment_rpy_);
+            is_imu_alignment_set = this->get_parameter("imu_alignment_rpy", imu_alignment_rpy_);
 
             if(p_wheel_odom_expected_rate<=0)
             {
@@ -80,7 +80,7 @@ public:
             p_longest_expected_input_odom_period = (1.0*MISSED_ODOM_MSG_SAFETY_MULTIPLIER)/p_wheel_odom_expected_rate;
 
             // Quaternion for IMU alignment
-            if (!is_imu_alignement_set) {
+            if (!is_imu_alignment_set) {
                 RCLCPP_WARN(this->get_logger(), "Parameter imu_alignment_rpy is not a list of three numbers, setting default 0,0,0");
             } else {
                 if (imu_alignment_rpy_.size() != 3) {
@@ -89,11 +89,11 @@ public:
                 }
             }
 
-            this->declare_parameter<std::vector<double>>("imu_alignment_rpy", std::vector<double>(3, 0.0));
+            this->declare_parameter<double>("mag_north_correction_yaw", 0.0);
             is_imu_mag_north_correction_set = this->get_parameter("mag_north_correction_yaw", mag_north_correction_yaw_);
 
             // Quaternion for Magnetic North correction
-            if (is_imu_mag_north_correction_set) {
+            if (!is_imu_mag_north_correction_set) {
                 RCLCPP_WARN(this->get_logger(), "Parameter mag_north_correction_yaw is not a double, setting default 0 radians");
             }
 
@@ -142,13 +142,14 @@ private:
     tf2::Quaternion current_attitude;
     tf2::Quaternion imu_alignment_;
     tf2::Quaternion mag_north_correction_;
+    double mag_north_correction_yaw_;
     std::chrono::time_point<std::chrono::system_clock> stamp_;
     rclcpp::Time msg_stamp_;
-    bool is_imu_alignement_set;
+    bool is_imu_alignment_set;
     bool is_imu_mag_north_correction_set;
 
 
-    std::vector<double> imu_alignment_rpy_ = std::vector<double>(3, 0.0);
+    std::vector<double> imu_alignment_rpy_;
 
     bool p_publish_odom_;
     std::string p_odom_topic_name_;
@@ -160,7 +161,7 @@ private:
     tf2::Vector3 current_linear_vel = tf2::Vector3(0.0,0.0,0.0);
 
 
-    double mag_north_correction_yaw_ = 0;
+
 
     // input wheel odom stuff
     bool initial_wheel_odom_received = false;
