@@ -9,6 +9,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 include_directories(
         ${norlab_imu_tools_INCLUDE_DIRS}
@@ -23,6 +24,7 @@ ament_target_dependencies(imu_bias_observer
         sensor_msgs
         tf2_ros
         tf2
+        tf2_geometry_msgs
         )
 #rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(imu_bias_observer "${cpp_typesupport_target}")
@@ -40,6 +42,7 @@ ament_target_dependencies(imu_and_wheel_odom_node
         nav_msgs
         tf2_ros
         tf2
+        tf2_geometry_msgs
         )
 #rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(imu_and_wheel_odom_node "${cpp_typesupport_target}")
