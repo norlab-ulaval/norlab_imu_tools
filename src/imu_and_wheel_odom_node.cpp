@@ -202,6 +202,7 @@ private:
         msg_stamp_ = rclcpp::Time(imu_msg.header.stamp);
         transform_.stamp_ = tf2::TimePoint(std::chrono::nanoseconds(msg_stamp_.nanoseconds()));
         tf2::convert(transform_, transform_msg_);
+        transform_msg_.child_frame_id = p_odom_frame_;
 
 
 //        tfB_->sendTransform(transform_);
