@@ -12,7 +12,7 @@
 
     ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## Values in RAD
-    <param name="imu_alignment_rpy" value="[-3.14159265359, 0.0, 1.570796327]"/>  <!--Pelicase box for skidoo, all angles in radians! -->
+    <param name="imu_alignment_rpy" value="[0.0, 0.0, 0.0]"/>  <!--Pelicase box for skidoo, all angles in radians! -->
     <param name="mag_north_correction_yaw" value="0.0" />
 
 
