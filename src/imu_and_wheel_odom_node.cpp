@@ -3,13 +3,18 @@
 // Laval University, NORLAB, 2019
 
 #include <rclcpp/rclcpp.hpp>
+#include "rclcpp/wait_for_message.hpp"
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Vector3.h>
+#include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/utils.h>
 #include <tf2/transform_datatypes.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include "tf2/exceptions.h"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/buffer.h"
 #include <sensor_msgs/msg/imu.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
@@ -18,6 +23,7 @@
 #include <cmath>
 #include <sstream>
 
+using namespace std::chrono_literals;
 #define MISSED_ODOM_MSG_SAFETY_MULTIPLIER 6.0
 
 class imuAndWheelOdomNode : public rclcpp::Node
@@ -69,25 +75,68 @@ public:
             this->declare_parameter<double>("wheel_odom_expected_rate", 20.0);
             this->get_parameter("wheel_odom_expected_rate", p_wheel_odom_expected_rate);
 
-
-            this->declare_parameter<std::vector<double>>("imu_alignment_rpy", std::vector<double>(3, 0.0));
-            is_imu_alignment_set = this->get_parameter("imu_alignment_rpy", imu_alignment_rpy_);
-
             if(p_wheel_odom_expected_rate<=0)
             {
                 throw "Zero or negative rate for wheel odometry is a nonsense.";
             }
             p_longest_expected_input_odom_period = (1.0*MISSED_ODOM_MSG_SAFETY_MULTIPLIER)/p_wheel_odom_expected_rate;
 
-            // Quaternion for IMU alignment
-            if (!is_imu_alignment_set) {
-                RCLCPP_WARN(this->get_logger(), "Parameter imu_alignment_rpy is not a list of three numbers, setting default 0,0,0");
-            } else {
-                if (imu_alignment_rpy_.size() != 3) {
-                    RCLCPP_WARN(this->get_logger(), "Parameter imu_alignment_rpy is not a list of three numbers, setting default 0,0,0");
-                    imu_alignment_rpy_.assign(3, 0.0);
-                }
-            }
+			// get IMU frame_id
+			RCLCPP_DEBUG(this->get_logger(), "Waiting for IMU message...");
+			sensor_msgs::msg::Imu imu_msg;
+			std::string imu_frame;
+			auto node = std::make_shared<rclcpp::Node>("wait_for_message_node");
+			auto response = rclcpp::wait_for_message(imu_msg, node, "imu_topic", 5s);
+
+			if (response) {
+				imu_frame = imu_msg.header.frame_id;
+				imu_frame = imu_frame.substr(1, imu_frame.length() - 1);
+			} else {
+				RCLCPP_ERROR(this->get_logger(), "No IMU message received."
+												 "\nCannot find the tf between base_link and IMU without the IMU frame name."
+												 "\nPlease make sure the IMU messages are published.");
+				return;
+			}
+
+			// Quaternion for IMU alignment
+			if (!imu_frame.empty()) {// Get IMU->base_link tf
+				RCLCPP_DEBUG(this->get_logger(), "Waiting for transform between %s and base_link frames", imu_frame.c_str());
+
+				std::unique_ptr <tf2_ros::Buffer> tf_buffer = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+				std::shared_ptr <tf2_ros::TransformListener> tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
+				geometry_msgs::msg::TransformStamped tf_imu_bl;
+				try {
+//					wait for the buffer to be filled
+//					skipping this would make several
+//					'Warning: Invalid frame ID "imu" passed to canTransform argument target_frame - frame does not exist
+//					 at line 93 in ./src/buffer_core.cpp' show up in the log.
+					unsigned int ctr = 0;
+					const unsigned int ctr_max = 10;
+					auto sleep_duration_ms = 10ms;
+					while (!tf_buffer->_frameExists(imu_frame)) {
+						ctr++;
+						rclcpp::sleep_for(sleep_duration_ms);
+						if (ctr >= ctr_max) {
+							throw tf2::TimeoutException("tf2 lookup timeout after: " +
+								std::to_string(ctr_max*sleep_duration_ms.count()) + " ms. IMU frame " + imu_frame + " doesn't exist");
+						}
+					}
+					RCLCPP_DEBUG(this->get_logger(), "Transform available after %d attempts", ctr);
+					tf_imu_bl = tf_buffer->lookupTransform(imu_frame, p_base_frame_, this->now());
+				} catch (const tf2::TransformException& ex) {
+					RCLCPP_ERROR(this->get_logger(), "Unable to get tf between IMU and base_link (%s->%s): %s", imu_frame.c_str(),
+						p_base_frame_.c_str(), ex.what());
+					throw ex;
+				}
+				tf2::Quaternion quat;
+				tf2::fromMsg(tf_imu_bl.transform.rotation, quat);
+				const tf2::Matrix3x3 matrix(quat);
+				double roll, pitch, yaw;
+				matrix.getRPY(roll, pitch, yaw);
+				// Evaluate alignment quternion
+				imu_alignment_.setRPY(roll, pitch, yaw);
+				RCLCPP_INFO(this->get_logger(), "RPY from TF: %f, %f, %f", roll, pitch, yaw);
+			}
 
             this->declare_parameter<double>("mag_north_correction_yaw", 0.0);
             is_imu_mag_north_correction_set = this->get_parameter("mag_north_correction_yaw", mag_north_correction_yaw_);
@@ -97,10 +146,6 @@ public:
                 RCLCPP_WARN(this->get_logger(), "Parameter mag_north_correction_yaw is not a double, setting default 0 radians");
             }
 
-            // Evaluate alignment quternion
-            imu_alignment_.setRPY(imu_alignment_rpy_[0],
-                                  imu_alignment_rpy_[1],
-                                  imu_alignment_rpy_[2]);
 
             // Evaluate nag. north corr. quternion
             mag_north_correction_.setRPY(0.0,
@@ -136,7 +181,7 @@ private:
     std::string p_odom_frame_;
     std::string p_base_frame_;
     //tf stuff
-    tf2::Stamped<tf2::Transform> transform_;
+	tf2::Stamped<tf2::Transform> transform_;
     geometry_msgs::msg::TransformStamped transform_msg_;
     tf2::Quaternion tmp_;
     tf2::Quaternion current_attitude;
@@ -148,9 +193,6 @@ private:
     bool is_imu_alignment_set;
     bool is_imu_mag_north_correction_set;
 
-
-    std::vector<double> imu_alignment_rpy_;
-
     bool p_publish_odom_;
     std::string p_odom_topic_name_;
 //        ros::Publisher *odom_pub_;
@@ -160,10 +202,7 @@ private:
 
     tf2::Vector3 current_linear_vel = tf2::Vector3(0.0,0.0,0.0);
 
-
-
-
-    // input wheel odom stuff
+	// input wheel odom stuff
     bool initial_wheel_odom_received = false;
     rclcpp::Time previous_w_odom_stamp;
     double p_wheel_odom_vx_scale = 1.0;
