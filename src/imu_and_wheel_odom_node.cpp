@@ -90,7 +90,6 @@ public:
 
 			if (response) {
 				imu_frame = imu_msg.header.frame_id;
-				imu_frame = imu_frame.substr(1, imu_frame.length() - 1);
 			} else {
 				RCLCPP_ERROR(this->get_logger(), "No IMU message received."
 												 "\nCannot find the tf between base_link and IMU without the IMU frame name."
@@ -99,7 +98,11 @@ public:
 			}
 
 			// Quaternion for IMU alignment
-			if (!imu_frame.empty()) {// Get IMU->base_link tf
+			if (!imu_frame.empty()) { // Get IMU->base_link tf
+				if (imu_frame[0] == '/') {
+					RCLCPP_ERROR(this->get_logger(), "In ROS 2, IMU frame name cannot start with '/'.");
+					return;
+				}
 				RCLCPP_DEBUG(this->get_logger(), "Waiting for transform between %s and base_link frames", imu_frame.c_str());
 
 				std::unique_ptr <tf2_ros::Buffer> tf_buffer = std::make_unique<tf2_ros::Buffer>(this->get_clock());
