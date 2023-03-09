@@ -2,7 +2,7 @@
 -->
 <launch>
 
-  <node pkg="norlab_imu_tools" exec="imu_and_wheel_odom_node" name="imu_and_wheel_odom_node" output="screen">
+  <node pkg="norlab_imu_tools" exec="imu_and_wheel_odom_node" name="imu_and_wheel_odom_node" output="screen" respawn="true">
     <remap from="imu_topic" to="/MTI_imu/data" />
     <remap from="wheel_odom_topic" to="/warthog_velocity_controller/odom" />
     <param name="odom_frame" value="odom" />
