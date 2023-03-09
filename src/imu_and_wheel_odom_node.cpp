@@ -91,10 +91,11 @@ public:
 			if (response) {
 				imu_frame = imu_msg.header.frame_id;
 			} else {
-				RCLCPP_ERROR(this->get_logger(), "No IMU message received."
-												 "\nCannot find the tf between base_link and IMU without the IMU frame name."
-												 "\nPlease make sure the IMU messages are published.");
-				return;
+				throw rclcpp::exceptions::InvalidTopicNameError(this->get_namespace(),
+																"No IMU message received."
+																"\nCannot find the tf between base_link and IMU without the IMU frame name."
+																"\nPlease make sure the IMU messages are published.",
+																0);
 			}
 
 			// Quaternion for IMU alignment
