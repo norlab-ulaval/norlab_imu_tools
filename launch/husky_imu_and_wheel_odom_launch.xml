@@ -2,7 +2,7 @@
 -->
 <launch>
 
-  <node pkg="norlab_imu_tools" exec="imu_and_wheel_odom_node" name="imu_and_wheel_odom_node" output="screen">
+  <node pkg="norlab_imu_tools" exec="imu_and_wheel_odom_node" name="imu_and_wheel_odom_node" output="screen" respawn="true">
     <remap from="imu_topic" to="/MTI_imu/data" />
     <remap from="wheel_odom_topic" to="/husky_velocity_controller/odom" />
     <param name="odom_frame" value="odom" />
@@ -11,10 +11,7 @@
     <param name="wheel_odom_velocity_scale_x" value="0.95" />
 
 
-
-    ## This rosparam allows you to set IMU alignment w.r.t. base_link
     ## Values in RAD
-    <param name="imu_alignment_rpy" value="[0.0, 0.0, 3.14159]"/><!--all angles in radians! -->
     <param name="mag_north_correction_yaw" value="0.0" />
 
 
