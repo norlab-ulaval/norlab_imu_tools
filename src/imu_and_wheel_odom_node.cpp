@@ -99,10 +99,11 @@ public:
 			}
 
 			// Quaternion for IMU alignment
-			if (!imu_frame.empty()) { // Get IMU->base_link tf
+			if (imu_frame.empty()) {
+				throw rclcpp::exceptions::NameValidationError("frame", this->get_namespace(), "IMU frame cannot be empty.", 0);
+			} else { // Get IMU->base_link tf
 				if (imu_frame[0] == '/') {
-					RCLCPP_ERROR(this->get_logger(), "In ROS 2, IMU frame name cannot start with '/'.");
-					return;
+					throw rclcpp::exceptions::NameValidationError("frame", this->get_namespace(), "In ROS 2, IMU frame name cannot start with '/'", 0);
 				}
 				RCLCPP_DEBUG(this->get_logger(), "Waiting for transform between %s and base_link frames", imu_frame.c_str());
 
