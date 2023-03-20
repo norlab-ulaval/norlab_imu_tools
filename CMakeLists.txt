@@ -13,7 +13,6 @@ find_package(tf2_geometry_msgs REQUIRED)
 
 include_directories(
         ${norlab_imu_tools_INCLUDE_DIRS}
-        SYSTEM /opt/ros/$ENV{ROS_DISTRO}/include
 )
 
 install(DIRECTORY launch
