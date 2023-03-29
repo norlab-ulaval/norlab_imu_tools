@@ -244,7 +244,7 @@ private:
     {
 //        tf2::quaternionMsgToTF(imu_msg.orientation, tmp_);
         tf2::fromMsg(imu_msg.orientation, tmp_);
-
+        //tmp_ = tf2::Quaternion(0,0,0,1);
         if(std::isnan(tmp_.getX()) || std::isnan(tmp_.getY()) || std::isnan(tmp_.getZ()) || std::isnan(tmp_.getW()))
         {
             RCLCPP_WARN(this->get_logger(), "Received IMU message with NaN values, dropping");
@@ -325,7 +325,7 @@ private:
                                                           wheel_odom_msg.twist.twist.linear.y,
                                                           wheel_odom_msg.twist.twist.linear.z);
             // for warthog, only x is expected non-zero
-
+            RCLCPP_INFO_STREAM(this->get_logger(), "" << velocity_in_world.x());
             // time increment
             double delta_t = (rclcpp::Time(wheel_odom_msg.header.stamp) - previous_w_odom_stamp).seconds();
 

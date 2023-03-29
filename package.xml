@@ -5,7 +5,7 @@
   <version>0.1.0</version>
   <description>The norlab_imu_tools package</description>
 
-  <maintainer email="kubelvla@gmail.com">Vladimir Kubelka</maintainer>
+  <maintainer email="william.dubois@norlab.ulaval.ca">William Dubois</maintainer>
   <license>BSD</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

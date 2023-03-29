@@ -53,5 +53,22 @@ ament_export_dependencies(rosidl_default_runtime)
 install(TARGETS imu_and_wheel_odom_node
         DESTINATION lib/${PROJECT_NAME}
         )
+add_executable(imu_bias_compensator_node src/imu_bias_compensator_node.cpp)
+ament_target_dependencies(imu_bias_compensator_node
+        rclcpp
+        rclpy
+        std_msgs
+        sensor_msgs
+        nav_msgs
+        tf2_ros
+        tf2
+        tf2_geometry_msgs
+        )
+#rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(imu_bias_compensator_node "${cpp_typesupport_target}")
+ament_export_dependencies(rosidl_default_runtime)
+install(TARGETS imu_bias_compensator_node
+        DESTINATION lib/${PROJECT_NAME}
+        )
 
 ament_package()

@@ -1,7 +1,7 @@
 <launch>
     <node pkg="norlab_imu_tools" exec="imu_bias_observer" name="imu_bias_observer" output="screen">
         <remap from="imu_topic_in" to="/MTI_imu/data_raw" />
-        <remap from="bias_topic_out" to="/madgwick_filter/bias" />
+        <remap from="bias_topic_out" to="/MTI_imu/bias" />
         <param name="target_observation_samples" value="2000" />
     </node>
 </launch>

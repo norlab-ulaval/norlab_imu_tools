@@ -1,0 +1,8 @@
+<launch>
+    <set_parameter name="use_sim_time" value="true" />
+    <node pkg="norlab_imu_tools" exec="imu_bias_compensator_node" name="imu_bias_compensator" output="screen">
+        <remap from="imu_topic_in" to="/MTI_imu/data_raw" />
+        <remap from="bias_topic_in" to="/MTI_imu/bias" />
+        <remap from="imu_topic_out" to="/MTI_imu/data_unbiased" />
+    </node>
+</launch>
