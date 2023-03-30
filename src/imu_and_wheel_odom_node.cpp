@@ -324,8 +324,6 @@ private:
                     rotation_body_to_world * tf2::Vector3(wheel_odom_msg.twist.twist.linear.x * p_wheel_odom_vx_scale,
                                                           wheel_odom_msg.twist.twist.linear.y,
                                                           wheel_odom_msg.twist.twist.linear.z);
-            // for warthog, only x is expected non-zero
-            RCLCPP_INFO_STREAM(this->get_logger(), "" << velocity_in_world.x());
             // time increment
             double delta_t = (rclcpp::Time(wheel_odom_msg.header.stamp) - previous_w_odom_stamp).seconds();
 
