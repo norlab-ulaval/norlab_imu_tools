@@ -86,8 +86,9 @@ public:
         RCLCPP_DEBUG(this->get_logger(), "Waiting for IMU message...");
         sensor_msgs::msg::Imu imu_msg;
         std::string imu_frame;
-        auto node = std::make_shared<rclcpp::Node>("wait_for_message_node");
-        auto response = rclcpp::wait_for_message(imu_msg, node, "imu_topic", 5s);
+
+        auto sub = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic", 1, [](const std::shared_ptr<const sensor_msgs::msg::Imu>&) {});
+        auto response =  rclcpp::wait_for_message<sensor_msgs::msg::Imu, int64_t, std::milli>(imu_msg, sub, this->get_node_options().context(), 5s);
 
         if(response)
         {
