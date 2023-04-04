@@ -9,7 +9,7 @@
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/utils.h>
 #include <tf2/transform_datatypes.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <sensor_msgs/msg/imu.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
@@ -28,16 +28,16 @@ public:
         {
 //            ros::init(argc, argv, ROS_PACKAGE_NAME);
             double p_wheel_odom_expected_rate = 20.0;
-            this->declare_parameter<std::string>("odom_frame", "odom");
+            this->declare_parameter("odom_frame", "odom");
             this->get_parameter("odom_frame", p_odom_frame_);
 
-            this->declare_parameter<std::string>("base_frame", "base_link");
+            this->declare_parameter("base_frame", "base_link");
             this->get_parameter("base_frame", p_base_frame_);
 
-            this->declare_parameter<bool>("publish_odom", false);
+            this->declare_parameter("publish_odom", false);
             this->get_parameter("publish_odom", p_publish_odom_);
 
-            this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
+            this->declare_parameter("odom_topic_name", "imu_odom");
             this->get_parameter("odom_topic_name", p_odom_topic_name_);
 
             // If odom required, advertize the publisher and prepare the constant parts of the message
@@ -182,10 +182,10 @@ private:
 //    namespace tf { typedef btMatrix3x3 Matrix3x3; }
 //    #endif
 
-    void imuMsgCallback(const sensor_msgs::msg::Imu &imu_msg)
+    void imuMsgCallback(const sensor_msgs::msg::Imu::SharedPtr imu_msg)
     {
 //        tf2::quaternionMsgToTF(imu_msg.orientation, tmp_);
-        tf2::fromMsg(imu_msg.orientation, tmp_);
+        tf2::fromMsg(imu_msg->orientation, tmp_);
 
         if (std::isnan(tmp_.getX()) || std::isnan(tmp_.getY()) || std::isnan(tmp_.getZ()) || std::isnan(tmp_.getW())) {
             RCLCPP_WARN(this->get_logger(), "Received IMU message with NaN values, dropping");
@@ -199,7 +199,7 @@ private:
         transform_.setRotation(current_attitude);
 
         transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
-        msg_stamp_ = rclcpp::Time(imu_msg.header.stamp);
+        msg_stamp_ = rclcpp::Time(imu_msg->header.stamp);
         transform_.stamp_ = tf2::TimePoint(std::chrono::nanoseconds(msg_stamp_.nanoseconds()));
         tf2::convert(transform_, transform_msg_);
         transform_msg_.child_frame_id = p_base_frame_;
@@ -221,28 +221,28 @@ private:
             odom_msg_.twist.twist.linear.y = current_linear_vel.y();
             odom_msg_.twist.twist.linear.z = current_linear_vel.z();
 
-            odom_msg_.header.stamp = imu_msg.header.stamp;
+            odom_msg_.header.stamp = imu_msg->header.stamp;
             imuAndWheelOdomPublisher->publish(odom_msg_);
         }
     }
 
-    void wheelOdomMsgCallback(const nav_msgs::msg::Odometry &wheel_odom_msg)
+    void wheelOdomMsgCallback(const nav_msgs::msg::Odometry::SharedPtr wheel_odom_msg)
     {
 
     //prepare variables
     tf2::Vector3 new_position;
 
     //check for nonsense data
-    if (std::isnan(wheel_odom_msg.twist.twist.linear.x) ||
-        std::isnan(wheel_odom_msg.twist.twist.linear.y) ||
-        std::isnan(wheel_odom_msg.twist.twist.linear.z)) {
+    if (std::isnan(wheel_odom_msg->twist.twist.linear.x) ||
+        std::isnan(wheel_odom_msg->twist.twist.linear.y) ||
+        std::isnan(wheel_odom_msg->twist.twist.linear.z)) {
         RCLCPP_WARN(this->get_logger(), "Received Wheel Odometry message with NaN values, dropping");
         return;
     }
 
     // to know our delta time step, we need the previous time stamp. The first odom message is used to initialize it
     if (!initial_wheel_odom_received) {
-        previous_w_odom_stamp = wheel_odom_msg.header.stamp;
+        previous_w_odom_stamp = wheel_odom_msg->header.stamp;
         initial_wheel_odom_received = true;
         return;
     }
@@ -258,13 +258,13 @@ private:
 
         // express the velocity in the world frame
         tf2::Vector3 velocity_in_world =
-                rotation_body_to_world * tf2::Vector3(wheel_odom_msg.twist.twist.linear.x * p_wheel_odom_vx_scale,
-                                                     wheel_odom_msg.twist.twist.linear.y,
-                                                     wheel_odom_msg.twist.twist.linear.z);
+                rotation_body_to_world * tf2::Vector3(wheel_odom_msg->twist.twist.linear.x * p_wheel_odom_vx_scale,
+                                                     wheel_odom_msg->twist.twist.linear.y,
+                                                     wheel_odom_msg->twist.twist.linear.z);
         // for warthog, only x is expected non-zero
 
         // time increment
-        double delta_t = (rclcpp::Time(wheel_odom_msg.header.stamp) - previous_w_odom_stamp).seconds();
+        double delta_t = (rclcpp::Time(wheel_odom_msg->header.stamp) - previous_w_odom_stamp).seconds();
 
         if (delta_t < 1e-7) {
             RCLCPP_WARN(this->get_logger(),
@@ -288,13 +288,13 @@ private:
 
         // update the current position and linear velocity
         current_position = new_position;
-        current_linear_vel = tf2::Vector3(wheel_odom_msg.twist.twist.linear.x * p_wheel_odom_vx_scale,
-                                         wheel_odom_msg.twist.twist.linear.y,
-                                         wheel_odom_msg.twist.twist.linear.z);
+        current_linear_vel = tf2::Vector3(wheel_odom_msg->twist.twist.linear.x * p_wheel_odom_vx_scale,
+                                         wheel_odom_msg->twist.twist.linear.y,
+                                         wheel_odom_msg->twist.twist.linear.z);
 
     }
 
-    previous_w_odom_stamp = wheel_odom_msg.header.stamp;
+    previous_w_odom_stamp = wheel_odom_msg->header.stamp;
     }
 
 };

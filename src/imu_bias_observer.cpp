@@ -12,7 +12,7 @@
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/utils.h>
 #include <tf2/transform_datatypes.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <sensor_msgs/msg/imu.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
@@ -51,14 +51,14 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr bias_pub;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscription;
 
-    void imuMsgCallback(const sensor_msgs::msg::Imu &imu_msg) {
+    void imuMsgCallback(const sensor_msgs::msg::Imu::SharedPtr imu_msg) {
         if(observe_now)
         {
             if(number_of_samples <= target_observation_samples)
             {
-                angular_velocity_sum_x += imu_msg.angular_velocity.x;
-                angular_velocity_sum_y += imu_msg.angular_velocity.y;
-                angular_velocity_sum_z += imu_msg.angular_velocity.z;
+                angular_velocity_sum_x += imu_msg->angular_velocity.x;
+                angular_velocity_sum_y += imu_msg->angular_velocity.y;
+                angular_velocity_sum_z += imu_msg->angular_velocity.z;
                 number_of_samples += 1;
 
                 if(number_of_samples % (target_observation_samples/5) == 0){
@@ -69,7 +69,7 @@ private:
             else
             {
                 geometry_msgs::msg::Vector3Stamped bias_msg;
-                bias_msg.header.stamp = this->now();;
+                bias_msg.header.stamp = this->now();
                 bias_msg.vector.x = angular_velocity_sum_x / double(number_of_samples);
                 bias_msg.vector.y = angular_velocity_sum_y / double(number_of_samples);
                 bias_msg.vector.z = angular_velocity_sum_z / double(number_of_samples);
