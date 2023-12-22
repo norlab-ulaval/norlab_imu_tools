@@ -73,4 +73,32 @@ install(TARGETS imu_bias_compensator_node
         DESTINATION lib/${PROJECT_NAME}
         )
 
+add_executable(pressure_moving_average_node src/pressure_moving_average_node.cpp)
+ament_target_dependencies(pressure_moving_average_node
+        rclcpp
+        rclpy
+        std_msgs
+        sensor_msgs
+        )
+#rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(pressure_moving_average_node "${cpp_typesupport_target}")
+ament_export_dependencies(rosidl_default_runtime)
+install(TARGETS pressure_moving_average_node
+        DESTINATION lib/${PROJECT_NAME}
+        )
+
+add_executable(temperature_moving_average_node src/temperature_moving_average_node.cpp)
+ament_target_dependencies(temperature_moving_average_node
+        rclcpp
+        rclpy
+        std_msgs
+        sensor_msgs
+        )
+#rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(temperature_moving_average_node "${cpp_typesupport_target}")
+ament_export_dependencies(rosidl_default_runtime)
+install(TARGETS temperature_moving_average_node
+        DESTINATION lib/${PROJECT_NAME}
+        )
+
 ament_package()
