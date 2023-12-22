@@ -4,6 +4,8 @@
 #include <cmath>
 #include <sstream>
 
+int HORIZON = 25;
+
 class temperatureMovingAverage : public rclcpp::Node
 {
 public:
@@ -15,7 +17,7 @@ public:
                                                                                           std::placeholders::_1));
 
         tempPub = this->create_publisher<sensor_msgs::msg::Temperature>("temp_out", 10);
-        boost::circular_buffer<double> cb(10);
+        cb.set_capacity(HORIZON);
     }
 private:
     boost::circular_buffer<double> cb;
@@ -35,7 +37,7 @@ private:
                 this->publishing = true;
             }
             // Publish the averaged message.
-            double averaged_temperature = std::accumulate(this->cb.begin(), this->cb.end(), 0)/this->cb.capacity();
+            double averaged_temperature = std::accumulate(this->cb.begin(), this->cb.end(), 0.0)/this->cb.capacity();
             sensor_msgs::msg::Temperature output_msg = temp_msg;
             output_msg.temperature = averaged_temperature;
             tempPub->publish(output_msg);

@@ -4,6 +4,8 @@
 #include <cmath>
 #include <sstream>
 
+int HORIZON = 25;
+
 class pressureMovingAverage : public rclcpp::Node
 {
 public:
@@ -15,7 +17,7 @@ public:
                                                                                           std::placeholders::_1));
 
         pressurePub = this->create_publisher<sensor_msgs::msg::FluidPressure>("pressure_out", 10);
-        boost::circular_buffer<double> cb(10);
+        cb.set_capacity(HORIZON);
     }
 private:
     boost::circular_buffer<double> cb;
@@ -35,7 +37,7 @@ private:
                 this->publishing = true;
             }
             // Publish the averaged message.
-            double averaged_pressure = std::accumulate(this->cb.begin(), this->cb.end(), 0)/this->cb.capacity();
+            double averaged_pressure = std::accumulate(this->cb.begin(), this->cb.end(), 0.0)/this->cb.capacity();
             sensor_msgs::msg::FluidPressure output_msg = pressure_msg;
             output_msg.fluid_pressure = averaged_pressure;
             pressurePub->publish(output_msg);
