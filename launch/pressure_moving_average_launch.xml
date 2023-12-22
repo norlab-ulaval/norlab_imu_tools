@@ -1,0 +1,7 @@
+<launch>
+    <set_parameter name="use_sim_time" value="true" />
+    <node pkg="norlab_imu_tools" exec="pressure_moving_average_node" name="pressure_moving_average" output="screen">
+        <remap from="pressure_in" to="/vectornav_imu/pressure" />
+        <remap from="pressure_out" to="/vectornav_imu/pressure_filtered" />
+    </node>
+</launch>
