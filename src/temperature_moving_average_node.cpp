@@ -11,13 +11,14 @@ public:
             Node("temperature_moving_average_node")
     {
         tempIn = this->create_subscription<sensor_msgs::msg::Temperature>("temp_in", 10,
-                                                                                std::bind(&imuMovingAverage::temperatureMsgCallback, this,
+                                                                                std::bind(&temperatureMovingAverage::temperatureMsgCallback, this,
                                                                                           std::placeholders::_1));
 
         tempPub = this->create_publisher<sensor_msgs::msg::Temperature>("temp_out", 10);
+        boost::circular_buffer<double> cb(10);
     }
 private:
-    boost::circular_buffer<double> cb(10);
+    boost::circular_buffer<double> cb;
     bool publishing = false;
 
     rclcpp::Publisher<sensor_msgs::msg::Temperature>::SharedPtr tempPub;
@@ -25,7 +26,7 @@ private:
 
     void temperatureMsgCallback(const sensor_msgs::msg::Temperature &temp_msg)
     {
-        this->cb.push_back(temp_msg.temperature)
+        this->cb.push_back(temp_msg.temperature);
         if (this->cb.size() == this->cb.capacity())
         {
             if (!this->publishing)
@@ -45,7 +46,7 @@ private:
 int main(int argc, char** argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<imuBiasCompensatorNode>());
+    rclcpp::spin(std::make_shared<temperatureMovingAverage>());
     rclcpp::shutdown();
     return 0;
 }

@@ -1,5 +1,5 @@
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/fluidpressure.hpp>
+#include <sensor_msgs/msg/fluid_pressure.hpp>
 #include <boost/circular_buffer.hpp>
 #include <cmath>
 #include <sstream>
@@ -10,14 +10,15 @@ public:
     pressureMovingAverage() :
             Node("pressure_moving_average_node")
     {
-        pressureIn = this->create_subscription<sensor_msgs::msg::FluidPressire>("pressure_in", 10,
+        pressureIn = this->create_subscription<sensor_msgs::msg::FluidPressure>("pressure_in", 10,
                                                                                 std::bind(&pressureMovingAverage::pressureMsgCallback, this,
                                                                                           std::placeholders::_1));
 
         pressurePub = this->create_publisher<sensor_msgs::msg::FluidPressure>("pressure_out", 10);
+        boost::circular_buffer<double> cb(10);
     }
 private:
-    boost::circular_buffer<double> cb(10);
+    boost::circular_buffer<double> cb;
     bool publishing = false;
 
     rclcpp::Publisher<sensor_msgs::msg::FluidPressure>::SharedPtr pressurePub;
@@ -25,7 +26,7 @@ private:
 
     void pressureMsgCallback(const sensor_msgs::msg::FluidPressure &pressure_msg)
     {
-        this->cb.push_back(pressure_msg.fluid_pressure)
+        this->cb.push_back(pressure_msg.fluid_pressure);
         if (this->cb.size() == this->cb.capacity())
         {
             if (!this->publishing)
@@ -45,7 +46,7 @@ private:
 int main(int argc, char** argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<imuBiasCompensatorNode>());
+    rclcpp::spin(std::make_shared<pressureMovingAverage>());
     rclcpp::shutdown();
     return 0;
 }
