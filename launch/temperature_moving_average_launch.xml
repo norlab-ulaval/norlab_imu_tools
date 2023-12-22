@@ -1,0 +1,7 @@
+<launch>
+    <set_parameter name="use_sim_time" value="true" />
+    <node pkg="norlab_imu_tools" exec="temperature_moving_average_node" name="temperature_moving_average" output="screen">
+        <remap from="temp_in" to="/vectornav_imu/temperature" />
+        <remap from="temp_out" to="/vectornav_imu/temperature_filtered" />
+    </node>
+</launch>
