@@ -12,6 +12,7 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 include_directories(
         ${norlab_imu_tools_INCLUDE_DIRS}
@@ -98,6 +99,21 @@ ament_target_dependencies(temperature_moving_average_node
 target_link_libraries(temperature_moving_average_node "${cpp_typesupport_target}")
 ament_export_dependencies(rosidl_default_runtime)
 install(TARGETS temperature_moving_average_node
+        DESTINATION lib/${PROJECT_NAME}
+        )
+
+add_executable(altitude_computation_node src/altitude_computation_node.cpp)
+ament_target_dependencies(altitude_computation_node
+        rclcpp
+        rclpy
+        std_msgs
+        sensor_msgs
+        geometry_msgs
+        )
+#rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(altitude_computation_node "${cpp_typesupport_target}")
+ament_export_dependencies(rosidl_default_runtime)
+install(TARGETS altitude_computation_node
         DESTINATION lib/${PROJECT_NAME}
         )
 
