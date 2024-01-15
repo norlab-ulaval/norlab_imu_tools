@@ -117,4 +117,18 @@ install(TARGETS altitude_computation_node
         DESTINATION lib/${PROJECT_NAME}
         )
 
+add_executable(altitude_moving_average_node src/altitude_moving_average_node.cpp)
+ament_target_dependencies(altitude_moving_average_node
+        rclcpp
+        rclpy
+        std_msgs
+        geometry_msgs
+)
+#rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(altitude_moving_average_node "${cpp_typesupport_target}")
+ament_export_dependencies(rosidl_default_runtime)
+install(TARGETS altitude_moving_average_node
+        DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()

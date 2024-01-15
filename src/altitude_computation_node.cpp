@@ -16,6 +16,9 @@ public:
                                                                                 std::bind(&altitudeComputation::pressureMsgCallback, this,
                                                                                           std::placeholders::_1));
         altitudePub = this->create_publisher<geometry_msgs::msg::PointStamped>("altitude_out", 10);
+
+        this->declare_parameter<std::string>("formula", "barometric");
+        this->get_parameter("formula", formula);
     }
 private:
     double Tb = 288.15;
@@ -29,14 +32,30 @@ private:
     bool is_first_altitude = true;
     double initial_altitude = 0.0;
 
+    std::string formula;
+
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr altitudePub;
     rclcpp::Subscription<sensor_msgs::msg::FluidPressure>::SharedPtr pressureIn;
 
     void pressureMsgCallback(const sensor_msgs::msg::FluidPressure &pressure_msg)
     {
         double P = pressure_msg.fluid_pressure;
-        double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-    	double altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
+        double altitude = 0;
+        if (this->formula == "barometric")
+        {
+            double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
+            altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
+        }
+        else if (this->formula == "hypsometric")
+        {
+            double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
+            altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
+        }
+        else
+        {
+            double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
+            altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
+        }
         if (this->is_first_altitude)
         {
             this->initial_altitude = altitude;

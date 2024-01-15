@@ -1,7 +1,9 @@
 <launch>
     <set_parameter name="use_sim_time" value="true" />
+    <arg name="formula" default="barometric"/>
     <node pkg="norlab_imu_tools" exec="altitude_computation_node" name="altitude_computation" output="screen">
         <remap from="pressure_in" to="/vectornav_imu/pressure_filtered" />
         <remap from="altitude_out" to="/vectornav_imu/altitude_computed" />
+        <param name="formula" value="$(var formula)"/>
     </node>
 </launch>

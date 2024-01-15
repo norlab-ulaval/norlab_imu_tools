@@ -1,0 +1,7 @@
+<launch>
+    <set_parameter name="use_sim_time" value="true" />
+    <node pkg="norlab_imu_tools" exec="altitude_moving_average_node" name="altitude_moving_average" output="screen">
+        <remap from="altitude_in" to="/vectornav_imu/altitude_computed" />
+        <remap from="altitude_out" to="/vectornav_imu/altitude_filtered" />
+    </node>
+</launch>
