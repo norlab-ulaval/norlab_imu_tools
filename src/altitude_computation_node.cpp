@@ -5,20 +5,21 @@
 #include <cmath>
 #include <sstream>
 
-int HORIZON = 25;
-
 class altitudeComputation : public rclcpp::Node
 {
 public:
     altitudeComputation() :
             Node("altitude_computation_node")
     {
-        pressureIn = this->create_subscription<sensor_msgs::msg::FluidPressure>("pressure_in", 10,
-                                                                                std::bind(&altitudeComputation::pressureMsgCallback, this,
+        refPressureIn = this->create_subscription<sensor_msgs::msg::FluidPressure>("ref_pressure_in", 10,
+                                                                                std::bind(&altitudeComputation::refPressureMsgCallback, this,
                                                                                           std::placeholders::_1));
-        tempIn = this->create_subscription<sensor_msgs::msg::Temperature>("temp_in", 10,
-                                                                                std::bind(&altitudeComputation::tempMsgCallback, this,
+        refTempIn = this->create_subscription<sensor_msgs::msg::Temperature>("ref_temp_in", 10,
+                                                                                std::bind(&altitudeComputation::refTempMsgCallback, this,
                                                                                           std::placeholders::_1));
+        sensorPressureIn = this->create_subscription<sensor_msgs::msg::FluidPressure>("sensor_pressure_in", 10,
+                                                                                   std::bind(&altitudeComputation::pressureMsgCallback, this,
+                                                                                             std::placeholders::_1));
         altitudePub = this->create_publisher<geometry_msgs::msg::PointStamped>("altitude_out", 10);
 
         this->declare_parameter<std::string>("formula", "barometric");
@@ -40,12 +41,15 @@ private:
     double initial_altitude = 0.0;
 
     std::string formula;
-    sensor_msgs::msg::Temperature lastTempMeasurement;
-    std::mutex lastTempMutex;
+    sensor_msgs::msg::Temperature lastRefTempMeasurement;
+    std::mutex lastRefTempMutex;
+    sensor_msgs::msg::FluidPressure lastRefPressureMeasurement;
+    std::mutex lastRefPressureMutex;
 
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr altitudePub;
-    rclcpp::Subscription<sensor_msgs::msg::FluidPressure>::SharedPtr pressureIn;
-    rclcpp::Subscription<sensor_msgs::msg::Temperature>::SharedPtr tempIn;
+    rclcpp::Subscription<sensor_msgs::msg::FluidPressure>::SharedPtr refPressureIn;
+    rclcpp::Subscription<sensor_msgs::msg::Temperature>::SharedPtr refTempIn;
+    rclcpp::Subscription<sensor_msgs::msg::FluidPressure>::SharedPtr sensorPressureIn;
 
     void pressureMsgCallback(const sensor_msgs::msg::FluidPressure &pressure_msg)
     {
@@ -57,8 +61,12 @@ private:
         double altitude = 0;
         if (this->formula == "barometric")
         {
-            double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-            altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
+            this->lastRefPressureMutex.lock();
+            double exponent_part = std::pow(P/this->lastRefPressureMeasurement.fluid_pressure, (this->R*this->Lb)/(this->g*this->M));
+            this->lastRefPressureMutex.unlock();
+            this->lastRefTempMutex.lock();
+            altitude = this->hb - ((this->lastRefTempMeasurement.temperature/this->Lb)*(exponent_part - 1));
+            this->lastRefTempMutex.unlock();
         }
         else if (this->formula == "hypsometric")
         {
@@ -68,9 +76,9 @@ private:
         }
         else
         {
-            this->lastTempMutex.lock();
-            altitude = ((this->R * this->lastTempMeasurement.temperature)/this->g) * std::log(this->P0/P);
-            this->lastTempMutex.unlock();
+            this->lastRefTempMutex.lock();
+            altitude = ((this->R * (this->lastRefTempMeasurement.temperature + 273.15))/this->g) * std::log(this->P0/P);
+            this->lastRefTempMutex.unlock();
         }
         if (this->is_first_altitude)
         {
@@ -81,21 +89,21 @@ private:
     	output_msg.header = pressure_msg.header;
     	output_msg.point.x = 0.0;
     	output_msg.point.y = 0.0;
-        if (this->formula == "hypsometric")
-        {
-            output_msg.point.z = altitude;
-        }
-        else
-        {
-            output_msg.point.z = altitude - this->initial_altitude;
-        }
+        output_msg.point.z = altitude - this->initial_altitude;
+
     	altitudePub->publish(output_msg);
     }
-    void tempMsgCallback(const sensor_msgs::msg::Temperature &temp_msg)
+    void refTempMsgCallback(const sensor_msgs::msg::Temperature &temp_msg)
     {
-        this->lastTempMutex.lock();
-        this->lastTempMeasurement = msg;
-        this->lastTempMutex.unlock();
+        this->lastRefTempMutex.lock();
+        this->lastRefTempMeasurement = temp_msg;
+        this->lastRefTempMutex.unlock();
+    }
+    void refPressureMsgCallback(const sensor_msgs::msg::FluidPressure &pressure_msg)
+    {
+        this->lastRefPressureMutex.lock();
+        this->lastRefPressureMeasurement = pressure_msg;
+        this->lastRefPressureMutex.unlock();
     }
 };
 

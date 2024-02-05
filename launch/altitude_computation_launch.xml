@@ -2,7 +2,9 @@
     <set_parameter name="use_sim_time" value="true" />
     <arg name="formula" default="barometric"/>
     <node pkg="norlab_imu_tools" exec="altitude_computation_node" name="altitude_computation" output="screen">
-        <remap from="pressure_in" to="/vectornav_imu/pressure_filtered" />
+        <remap from="ref_pressure_in" to="/dps310/pressure" />
+        <remap from="ref_temperature_in" to="/dps310/temperature"/>
+        <remap from="sensor_pressure_in" to="/dps310_1/pressure"/>
         <remap from="altitude_out" to="/vectornav_imu/altitude_computed" />
         <param name="formula" value="$(var formula)"/>
     </node>
