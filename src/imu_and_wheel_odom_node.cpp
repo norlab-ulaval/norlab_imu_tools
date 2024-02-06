@@ -20,6 +20,7 @@
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
 #include <cmath>
 #include <sstream>
 
@@ -45,6 +46,9 @@ public:
 
         this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
         this->get_parameter("odom_topic_name", p_odom_topic_name_);
+
+        this->declare_parameter<std::string>("altitude_topic_name", "/warthog_dps310_1_reference_dps310_sphere/altitude");
+        this->get_parameter("altitude_topic_name", p_altitude_topic_name_);
 
         // If odom required, advertize the publisher and prepare the constant parts of the message
         if(p_publish_odom_)
@@ -193,6 +197,12 @@ public:
                                                                                    this,
                                                                                    std::placeholders::_1));
 
+        altitudeSubscription = this->create_subscription<geometry_msgs::msg::PointStamped>(p_altitude_topic_name_, 10,
+                                                                           std::bind(
+                                                                                   &imuAndWheelOdomNode::altitudeMsgCallback,
+                                                                                   this,
+                                                                                   std::placeholders::_1));
+
         tfBroadcaster = std::unique_ptr<tf2_ros::TransformBroadcaster>(new tf2_ros::TransformBroadcaster(*this));
     }
 
@@ -235,6 +245,11 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr imuAndWheelOdomPublisher;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr wheelOdomSubscription;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imuSubscription;
+    // altitude stuff
+    geometry_msgs::msg::PointStamped lastAltitudeMeasurement;
+    std::mutex lastAltitudeMutex;
+    std::string p_altitude_topic_name_;
+    rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr altitudeSubscription;
 
 //    #ifndef TF_MATRIX3x3_H
 //        typedef btScalar tfScalar;
@@ -351,13 +366,36 @@ private:
 
 
             // update the current position and linear velocity
-            current_position = new_position;
+            lastAltitudeMutex.lock();
+            current_position = tf2::Vector3(new_position.x(),
+                                            new_position.y(),
+                                            lastAltitudeMeasurement.point.z);
+            lastAltitudeMutex.unlock();
+
             current_linear_vel = tf2::Vector3(wheel_odom_msg.twist.twist.linear.x * p_wheel_odom_vx_scale,
                                               wheel_odom_msg.twist.twist.linear.y,
                                               wheel_odom_msg.twist.twist.linear.z);
         }
 
         previous_w_odom_stamp = wheel_odom_msg.header.stamp;
+    }
+    void altitudeMsgCallback(const geometry_msgs::msg::PointStamped& altitude_msg)
+    {
+
+        //prepare variables
+        tf2::Vector3 new_position;
+
+        //check for nonsense data
+        if(std::isnan(altitude_msg.point.x) ||
+           std::isnan(altitude_msg.point.y) ||
+           std::isnan(altitude_msg.point.z))
+        {
+            RCLCPP_WARN(this->get_logger(), "Received Altitude message with NaN values, dropping");
+            return;
+        }
+        lastAltitudeMutex.lock();
+            lastAltitudeMeasurement = altitude_msg;
+        lastAltitudeMutex.unlock();
     }
 };
 

@@ -65,12 +65,12 @@ private:
             double exponent_part = std::pow(P/this->lastRefPressureMeasurement.fluid_pressure, (this->R*this->Lb)/(this->g*this->M));
             this->lastRefPressureMutex.unlock();
             this->lastRefTempMutex.lock();
-            altitude = this->hb - ((this->lastRefTempMeasurement.temperature/this->Lb)*(exponent_part - 1));
+            altitude = this->hb - (((this->lastRefTempMeasurement.temperature + 273.15)/this->Lb)*(exponent_part - 1)); //Temperature needs to be in Kelvin
             this->lastRefTempMutex.unlock();
         }
         else if (this->formula == "hypsometric")
         {
-            // assuming the virtual temperature is the temperature measured by the dps sensor.
+            // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
             double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
             altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
         }
