@@ -3,9 +3,9 @@
     <arg name="formula" default="barometric"/>
     <node pkg="norlab_imu_tools" exec="altitude_computation_node" name="altitude_computation" output="screen">
         <remap from="ref_pressure_in" to="/dps310/pressure" />
-        <remap from="ref_temperature_in" to="/dps310/temperature"/>
+        <remap from="ref_temp_in" to="/dps310/temperature"/>
         <remap from="sensor_pressure_in" to="/dps310_1/pressure"/>
-        <remap from="altitude_out" to="/vectornav_imu/altitude_computed" />
+        <remap from="altitude_out" to="/warthog_dps310_1_reference_dps310_sphere/altitude" />
         <param name="formula" value="$(var formula)"/>
     </node>
 </launch>

@@ -1,7 +1,7 @@
 <!-- This launchfile runs our simple imu+wheel odometry for the warthog. It requires odometry messages from the wheels and the processed IMU attitude
 -->
 <launch>
-
+  <set_parameter name="use_sim_time" value="true"/>
   <node pkg="norlab_imu_tools" exec="imu_and_wheel_odom_node" name="imu_and_wheel_odom_node" output="screen" respawn="true">
     <remap from="imu_topic" to="/MTI_imu/data" />
     <remap from="wheel_odom_topic" to="/warthog_velocity_controller/odom" />
