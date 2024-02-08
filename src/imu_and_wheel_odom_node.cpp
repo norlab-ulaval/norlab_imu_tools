@@ -47,9 +47,6 @@ public:
         this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
         this->get_parameter("odom_topic_name", p_odom_topic_name_);
 
-        this->declare_parameter<std::string>("altitude_topic_name", "/warthog_dps310_1_reference_dps310_sphere/altitude");
-        this->get_parameter("altitude_topic_name", p_altitude_topic_name_);
-
         // If odom required, advertize the publisher and prepare the constant parts of the message
         if(p_publish_odom_)
         {
@@ -197,7 +194,7 @@ public:
                                                                                    this,
                                                                                    std::placeholders::_1));
 
-        altitudeSubscription = this->create_subscription<geometry_msgs::msg::PointStamped>(p_altitude_topic_name_, 10,
+        altitudeSubscription = this->create_subscription<geometry_msgs::msg::PointStamped>("altitude_topic", 10,
                                                                            std::bind(
                                                                                    &imuAndWheelOdomNode::altitudeMsgCallback,
                                                                                    this,
@@ -248,7 +245,6 @@ private:
     // altitude stuff
     geometry_msgs::msg::PointStamped lastAltitudeMeasurement;
     std::mutex lastAltitudeMutex;
-    std::string p_altitude_topic_name_;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr altitudeSubscription;
 
 //    #ifndef TF_MATRIX3x3_H
