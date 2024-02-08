@@ -5,6 +5,7 @@
   <node pkg="norlab_imu_tools" exec="imu_and_wheel_odom_node" name="imu_and_wheel_odom_node" output="screen" respawn="true">
     <remap from="imu_topic" to="/MTI_imu/data" />
     <remap from="wheel_odom_topic" to="/warthog_velocity_controller/odom" />
+    <remap from="altitude_topic" to="/warthog_dps310_1_reference_dps310_sphere/altitude" />
     <param name="odom_frame" value="odom" />
     <param name="base_frame" value="base_link" />
     <param name="publish_translation" value="True" />
