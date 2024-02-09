@@ -8,6 +8,7 @@
     <remap from="altitude_topic" to="/warthog_dps310_1_reference_dps310_sphere/altitude" />
     <param name="odom_frame" value="odom" />
     <param name="base_frame" value="base_link" />
+    <param name="altimeter_frame" value="dps310_1" />
     <param name="publish_translation" value="True" />
     <param name="wheel_odom_velocity_scale_x" value="0.6332" /> <!-- Value for wheels : 0.95, Value for tracks: 0.6332 -->
 
