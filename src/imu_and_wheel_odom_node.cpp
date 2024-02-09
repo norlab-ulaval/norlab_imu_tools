@@ -39,6 +39,9 @@ public:
         this->declare_parameter<std::string>("odom_frame", "odom");
         this->get_parameter("odom_frame", p_odom_frame_);
 
+        this->declare_parameter<std::string>("altimeter_frame", "altimeter_link");
+        this->get_parameter("altimeter_frame", p_altimeter_frame_);
+
         this->declare_parameter<std::string>("base_frame", "base_link");
         this->get_parameter("base_frame", p_base_frame_);
 
@@ -207,12 +210,29 @@ public:
                                                                                    this,
                                                                                    std::placeholders::_1));
 
+        this->declare_parameter<bool>("real_time", true);
+        bool realTime;
+        this->get_parameter("real_time", realTime);
+
+        int messageQueueSize;
+        if(realTime)
+        {
+            tfBuffer = std::unique_ptr<tf2_ros::Buffer>(new tf2_ros::Buffer(this->get_clock()));
+            messageQueueSize = 1;
+        }
+        else
+        {
+            tfBuffer = std::unique_ptr<tf2_ros::Buffer>(new tf2_ros::Buffer(this->get_clock(), std::chrono::seconds(1000000)));
+            messageQueueSize = 0;
+        }
+        tfListener = std::unique_ptr<tf2_ros::TransformListener>(new tf2_ros::TransformListener(*tfBuffer));
         tfBroadcaster = std::unique_ptr<tf2_ros::TransformBroadcaster>(new tf2_ros::TransformBroadcaster(*this));
     }
 
 private:
     //frame names
     std::string p_odom_frame_;
+    std::string p_altimeter_frame_;
     std::string p_base_frame_;
     //tf stuff
     tf2::Stamped<tf2::Transform> transform_;
@@ -247,11 +267,17 @@ private:
     bool p_allow_translation = true;
 
     std::unique_ptr<tf2_ros::TransformBroadcaster> tfBroadcaster;
+    std::unique_ptr<tf2_ros::Buffer> tfBuffer;
+    std::unique_ptr<tf2_ros::TransformListener> tfListener;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr imuAndWheelOdomPublisher;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr wheelOdomSubscription;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imuSubscription;
     // altitude stuff
-    geometry_msgs::msg::PointStamped lastAltitudeMeasurement;
+    double firstAltitudeMeasurementCorrectFrame;
+    double lastAltitudeMeasurementCorrectFrame;
+    double lastAltitudeMeasurementAltiFrame;
+    bool isFirstAltitude;
+    std::mutex lastAltitudeAltiFrameMutex;
     std::mutex lastAltitudeMutex;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr altitudeSubscription;
 
@@ -275,26 +301,50 @@ private:
         tmp_.normalize();
 
         current_attitude = tmp_;
-        if(p_force_2d_)
+        transform_.setRotation(current_attitude);
+
+        geometry_msgs::msg::TransformStamped currentAltiToImuTf = tfBuffer->lookupTransform(imu_msg.header.frame_id, p_altimeter_frame_, imu_msg.header.stamp,
+                                                                                            std::chrono::milliseconds(100));
+        geometry_msgs::msg::Pose AltiPoseInImuFrame;
+        AltiPoseInImuFrame.position.x = currentAltiToImuTf.transform.translation.x;
+        AltiPoseInImuFrame.position.y = currentAltiToImuTf.transform.translation.y;
+        AltiPoseInImuFrame.position.z = currentAltiToImuTf.transform.translation.z;
+        AltiPoseInImuFrame.orientation = currentAltiToImuTf.transform.rotation;
+
+        geometry_msgs::msg::TransformStamped imuToOdomTfQuaternion;
+        imuToOdomTfQuaternion.transform.rotation = imu_msg.orientation;
+
+        geometry_msgs::msg::Pose altiPoseInOdomFrame;
+        tf2::doTransform(AltiPoseInImuFrame, altiPoseInOdomFrame, imuToOdomTfQuaternion);
+
+        geometry_msgs::msg::TransformStamped altiToOdomTf;
+        lastAltitudeAltiFrameMutex.lock();
+        altiToOdomTf.transform.translation.z = lastAltitudeMeasurementAltiFrame;
+        lastAltitudeAltiFrameMutex.unlock();
+        altiToOdomTf.transform.rotation = altiPoseInOdomFrame.orientation;
+
+        geometry_msgs::msg::TransformStamped robotToAltiFrameTf = tfBuffer->lookupTransform(p_altimeter_frame_, p_base_frame_, imu_msg.header.stamp,
+                                                                                            std::chrono::milliseconds(100));
+        geometry_msgs::msg::Pose robotPoseInAltiFrame;
+        robotPoseInAltiFrame.position.x = robotToAltiFrameTf.transform.translation.x;
+        robotPoseInAltiFrame.position.y = robotToAltiFrameTf.transform.translation.y;
+        robotPoseInAltiFrame.position.z = robotToAltiFrameTf.transform.translation.z;
+        robotPoseInAltiFrame.orientation = robotToAltiFrameTf.transform.rotation;
+        geometry_msgs::msg::Pose altitudeRobotInOdomFrame;
+        tf2::doTransform(robotPoseInAltiFrame, altitudeRobotInOdomFrame, altiToOdomTf);
+        if (isFirstAltitude)
         {
-            const tf2::Matrix3x3 matrix(current_attitude);
-            double roll, pitch, yaw;
-            matrix.getRPY(roll, pitch, yaw);
-            current_attitude.setRPY(0.0, 0.0, yaw);
-            transform_.setRotation(current_attitude);
+            firstAltitudeMeasurementCorrectFrame = altitudeRobotInOdomFrame.position.z;
+            isFirstAltitude = false;
         }
-        else
-        {
-            transform_.setRotation(current_attitude);
-        }
-        if(p_force_2d_)
-        {
-            transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), 0.0));
-        }
-        else
-        {
-            transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
-        }
+        lastAltitudeMutex.lock();
+        lastAltitudeMeasurementCorrectFrame = altitudeRobotInOdomFrame.position.z - firstAltitudeMeasurementCorrectFrame;
+        current_position = tf2::Vector3(current_position.x(),
+                                        current_position.y(),
+                                        lastAltitudeMeasurementCorrectFrame);
+        lastAltitudeMutex.unlock();
+
+        transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
         msg_stamp_ = rclcpp::Time(imu_msg.header.stamp);
         transform_.stamp_ = tf2::TimePoint(std::chrono::nanoseconds(msg_stamp_.nanoseconds()));
         tf2::convert(transform_, transform_msg_);
@@ -405,9 +455,7 @@ private:
 
             // update the current position and linear velocity
             lastAltitudeMutex.lock();
-            current_position = tf2::Vector3(new_position.x(),
-                                            new_position.y(),
-                                            lastAltitudeMeasurement.point.z);
+            current_position = tf2::Vector3(new_position.x(), new_position.y(), lastAltitudeMeasurementCorrectFrame);
             lastAltitudeMutex.unlock();
 
             current_linear_vel = tf2::Vector3(wheel_odom_msg.twist.twist.linear.x * p_wheel_odom_vx_scale,
@@ -431,9 +479,9 @@ private:
             RCLCPP_WARN(this->get_logger(), "Received Altitude message with NaN values, dropping");
             return;
         }
-        lastAltitudeMutex.lock();
-            lastAltitudeMeasurement = altitude_msg;
-        lastAltitudeMutex.unlock();
+        lastAltitudeAltiFrameMutex.lock();
+        lastAltitudeMeasurementAltiFrame = altitude_msg.point.z;
+        lastAltitudeAltiFrameMutex.unlock();
     }
 };
 
