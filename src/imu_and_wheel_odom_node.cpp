@@ -268,7 +268,7 @@ private:
     double firstAltitudeMeasurementCorrectFrame;
     double lastAltitudeMeasurementCorrectFrame;
     double lastAltitudeMeasurementAltiFrame;
-    bool isFirstAltitude;
+    bool isFirstAltitude = true;
     std::mutex lastAltitudeAltiFrameMutex;
     std::mutex lastAltitudeMutex;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr altitudeSubscription;
@@ -328,12 +328,14 @@ private:
         {
             firstAltitudeMeasurementCorrectFrame = altitudeRobotInOdomFrame.position.z;
             isFirstAltitude = false;
+//            RCLCPP_INFO(this->get_logger(), "First Altitude measurement value: %f", firstAltitudeMeasurementCorrectFrame);
         }
         lastAltitudeMutex.lock();
         lastAltitudeMeasurementCorrectFrame = altitudeRobotInOdomFrame.position.z - firstAltitudeMeasurementCorrectFrame;
         current_position = tf2::Vector3(current_position.x(),
                                         current_position.y(),
                                         lastAltitudeMeasurementCorrectFrame);
+//        RCLCPP_INFO(this->get_logger(), "Last Altitude measurement value: %f", lastAltitudeMeasurementCorrectFrame);
         lastAltitudeMutex.unlock();
 
         transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
