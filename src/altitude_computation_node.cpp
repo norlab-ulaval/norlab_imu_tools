@@ -1,5 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/fluid_pressure.hpp>
+#include "rtf_sensors_msgs/msg/custom_pressure_temperature.hpp"
 #include <sensor_msgs/msg/temperature.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <cmath>
@@ -17,7 +18,7 @@ public:
         refTempIn = this->create_subscription<sensor_msgs::msg::Temperature>("ref_temp_in", 10,
                                                                                 std::bind(&altitudeComputation::refTempMsgCallback, this,
                                                                                           std::placeholders::_1));
-        sensorPressureIn = this->create_subscription<sensor_msgs::msg::FluidPressure>("sensor_pressure_in", 10,
+        sensorPressureIn = this->create_subscription<rtf_sensors_msgs::msg::CustomPressureTemperature>("sensor_pressure_in", 10,
                                                                                    std::bind(&altitudeComputation::pressureMsgCallback, this,
                                                                                              std::placeholders::_1));
         altitudePub = this->create_publisher<geometry_msgs::msg::PointStamped>("altitude_out", 10);
@@ -37,6 +38,10 @@ private:
 
     bool is_first_altitude = true;
     bool is_first_msg = true;
+    bool first_ref_press_msg_received = false;
+    bool first_ref_temp_msg_received = false;
+    bool is_first_msg_ref_press = true;
+    bool is_first_msg_ref_temp = true;
 
     double initial_altitude = 0.0;
 
@@ -49,61 +54,73 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr altitudePub;
     rclcpp::Subscription<sensor_msgs::msg::FluidPressure>::SharedPtr refPressureIn;
     rclcpp::Subscription<sensor_msgs::msg::Temperature>::SharedPtr refTempIn;
-    rclcpp::Subscription<sensor_msgs::msg::FluidPressure>::SharedPtr sensorPressureIn;
+    rclcpp::Subscription<rtf_sensors_msgs::msg::CustomPressureTemperature>::SharedPtr sensorPressureIn;
 
-    void pressureMsgCallback(const sensor_msgs::msg::FluidPressure &pressure_msg)
+    void pressureMsgCallback(const rtf_sensors_msgs::msg::CustomPressureTemperature &pressure_msg)
     {
         if (this->is_first_msg)
         {
-            this->P0 = pressure_msg.fluid_pressure;
+            this->P0 = pressure_msg.pressure;
         }
-        double P = pressure_msg.fluid_pressure;
+        double P = pressure_msg.pressure;
         double altitude = 0;
-        if (this->formula == "barometric")
+        this->lastRefPressureMutex.lock();
+        double localRefPressure = this->lastRefPressureMeasurement.fluid_pressure;
+        this->lastRefPressureMutex.unlock();
+        this->lastRefTempMutex.lock();
+        double localRefTemperature = this->lastRefTempMeasurement.temperature;
+        this->lastRefTempMutex.unlock();
+        if (this->first_ref_press_msg_received and this->first_ref_temp_msg_received)
         {
-            this->lastRefPressureMutex.lock();
-            double exponent_part = std::pow(P/this->lastRefPressureMeasurement.fluid_pressure, (this->R*this->Lb)/(this->g*this->M));
-            this->lastRefPressureMutex.unlock();
-            this->lastRefTempMutex.lock();
-            altitude = this->hb - (((this->lastRefTempMeasurement.temperature + 273.15)/this->Lb)*(exponent_part - 1)); //Temperature needs to be in Kelvin
-            this->lastRefTempMutex.unlock();
+            if (this->formula == "barometric")
+            {
+                double exponent_part = std::pow(P/localRefPressure, (this->R*this->Lb)/(this->g*this->M));
+                altitude = this->hb - (((localRefTemperature + 273.15)/this->Lb)*(exponent_part - 1)); //Temperature needs to be in Kelvin
+            }
+            else if (this->formula == "hypsometric")
+            {
+                // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
+                double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
+                altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
+            }
+            else
+            {
+                altitude = ((this->R * (localRefTemperature + 273.15))/this->g) * std::log(this->P0/P);
+            }
+            if (this->is_first_altitude)
+            {
+                this->initial_altitude = altitude;
+                this->is_first_altitude = false;
+            }
+            geometry_msgs::msg::PointStamped output_msg;
+            output_msg.header = pressure_msg.header;
+            output_msg.point.x = 0.0;
+            output_msg.point.y = 0.0;
+            output_msg.point.z = altitude - this->initial_altitude;
+    	    altitudePub->publish(output_msg);
         }
-        else if (this->formula == "hypsometric")
-        {
-            // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
-            double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-            altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
-        }
-        else
-        {
-            this->lastRefTempMutex.lock();
-            altitude = ((this->R * (this->lastRefTempMeasurement.temperature + 273.15))/this->g) * std::log(this->P0/P);
-            this->lastRefTempMutex.unlock();
-        }
-        if (this->is_first_altitude)
-        {
-            this->initial_altitude = altitude;
-            this->is_first_altitude = false;
-        }
-        geometry_msgs::msg::PointStamped output_msg;
-    	output_msg.header = pressure_msg.header;
-    	output_msg.point.x = 0.0;
-    	output_msg.point.y = 0.0;
-        output_msg.point.z = altitude - this->initial_altitude;
-
-    	altitudePub->publish(output_msg);
     }
     void refTempMsgCallback(const sensor_msgs::msg::Temperature &temp_msg)
     {
         this->lastRefTempMutex.lock();
         this->lastRefTempMeasurement = temp_msg;
         this->lastRefTempMutex.unlock();
+        if (this->is_first_msg_ref_temp)
+        {
+            this->first_ref_temp_msg_received = true;
+            this->is_first_msg_ref_temp = false;
+        }
     }
     void refPressureMsgCallback(const sensor_msgs::msg::FluidPressure &pressure_msg)
     {
         this->lastRefPressureMutex.lock();
         this->lastRefPressureMeasurement = pressure_msg;
         this->lastRefPressureMutex.unlock();
+        if (this->is_first_msg_ref_press)
+        {
+            this->first_ref_press_msg_received = true;
+            this->is_first_msg_ref_press = false;
+        }
     }
 };
 

@@ -13,6 +13,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(rtf_sensors_msgs REQUIRED)
 
 include_directories(
         ${norlab_imu_tools_INCLUDE_DIRS}
@@ -108,6 +109,7 @@ ament_target_dependencies(altitude_computation_node
         rclpy
         std_msgs
         sensor_msgs
+        rtf_sensors_msgs
         geometry_msgs
         )
 #rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
