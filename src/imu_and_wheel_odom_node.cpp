@@ -47,6 +47,9 @@ public:
         this->declare_parameter<bool>("publish_odom", false);
         this->get_parameter("publish_odom", p_publish_odom_);
 
+        this->declare_parameter<bool>("use_altitude", true);
+        this->get_parameter("use_altitude", p_use_altitude_);
+
         this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
         this->get_parameter("odom_topic_name", p_odom_topic_name_);
 
@@ -242,6 +245,7 @@ private:
 
     bool p_publish_odom_;
     std::string p_odom_topic_name_;
+    bool p_use_altitude_;
 //        ros::Publisher *odom_pub_;
     nav_msgs::msg::Odometry odom_msg_;
 
@@ -330,6 +334,7 @@ private:
             isFirstAltitude = false;
 //            RCLCPP_INFO(this->get_logger(), "First Altitude measurement value: %f", firstAltitudeMeasurementCorrectFrame);
         }
+        if (p_use_altitude_){
         lastAltitudeMutex.lock();
         lastAltitudeMeasurementCorrectFrame = altitudeRobotInOdomFrame.position.z - firstAltitudeMeasurementCorrectFrame;
         current_position = tf2::Vector3(current_position.x(),
@@ -337,7 +342,8 @@ private:
                                         lastAltitudeMeasurementCorrectFrame);
 //        RCLCPP_INFO(this->get_logger(), "Last Altitude measurement value: %f", lastAltitudeMeasurementCorrectFrame);
         lastAltitudeMutex.unlock();
-
+        }
+        
         transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
         msg_stamp_ = rclcpp::Time(imu_msg.header.stamp);
         transform_.stamp_ = tf2::TimePoint(std::chrono::nanoseconds(msg_stamp_.nanoseconds()));
@@ -431,9 +437,14 @@ private:
 
 
             // update the current position and linear velocity
+            if (p_use_altitude_){
             lastAltitudeMutex.lock();
             current_position = tf2::Vector3(new_position.x(), new_position.y(), lastAltitudeMeasurementCorrectFrame);
             lastAltitudeMutex.unlock();
+            }
+            else{
+                current_position = tf2::Vector3(new_position.x(), new_position.y(), new_position.z());
+            }
 
             current_linear_vel = tf2::Vector3(wheel_odom_msg.twist.twist.linear.x * p_wheel_odom_vx_scale,
                                               wheel_odom_msg.twist.twist.linear.y,

@@ -1,0 +1,11 @@
+<launch>
+    <set_parameter name="use_sim_time" value="true" />
+    <arg name="formula" default="barometric"/>
+    <node pkg="norlab_imu_tools" exec="altitude_computation_node" name="altitude_computation" output="screen">
+        <remap from="ref_pressure_in" to="/setra/pressure" />
+        <remap from="ref_temp_in" to="/mcp9808/temperature"/>
+        <remap from="sensor_pressure_in" to="/dps310_marmotte/data"/>
+        <remap from="altitude_out" to="/altitude" />
+        <param name="formula" value="$(var formula)"/>
+    </node>
+</launch>
