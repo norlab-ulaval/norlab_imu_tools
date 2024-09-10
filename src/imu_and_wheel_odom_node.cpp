@@ -358,15 +358,22 @@ private:
         {
             geometry_msgs::msg::Quaternion quat_msg;
             tf2::convert(current_attitude, quat_msg);
+            // tf2::convert(tf2::Quaternion(0,0,0,1), quat_msg);
             odom_msg_.pose.pose.orientation = quat_msg;
 
             odom_msg_.pose.pose.position.x = current_position.x();
             odom_msg_.pose.pose.position.y = current_position.y();
             odom_msg_.pose.pose.position.z = current_position.z();
+            // odom_msg_.pose.pose.position.x = 0.0;
+            // odom_msg_.pose.pose.position.y = 0.0;
+            // odom_msg_.pose.pose.position.z = 0.0;
 
             odom_msg_.twist.twist.linear.x = current_linear_vel.x();
             odom_msg_.twist.twist.linear.y = current_linear_vel.y();
             odom_msg_.twist.twist.linear.z = current_linear_vel.z();
+            // odom_msg_.twist.twist.linear.x = 0.0;
+            // odom_msg_.twist.twist.linear.y = 0.0;
+            // odom_msg_.twist.twist.linear.z = 0.0;
 
             odom_msg_.header.stamp = imu_msg.header.stamp;
             imuAndWheelOdomPublisher->publish(odom_msg_);
