@@ -392,6 +392,9 @@ private:
             odom_msg_.twist.twist.linear.x = current_linear_vel.x();
             odom_msg_.twist.twist.linear.y = current_linear_vel.y();
             odom_msg_.twist.twist.linear.z = current_linear_vel.z();
+            // odom_msg_.twist.twist.linear.x = 0.0;
+            // odom_msg_.twist.twist.linear.y = 0.0;
+            // odom_msg_.twist.twist.linear.z = 0.0;
 
             odom_msg_.header.stamp = imu_msg.header.stamp;
             imuAndWheelOdomPublisher->publish(odom_msg_);
