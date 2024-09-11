@@ -1,6 +1,6 @@
 <launch>
     <set_parameter name="use_sim_time" value="true" />
-    <arg name="formula" default="barometric"/>
+    <arg name="formula" default="hypsometric"/>
     <node pkg="norlab_imu_tools" exec="altitude_computation_node" name="altitude_computation" output="screen">
         <remap from="ref_pressure_in_setra" to="/setra/pressure" />
         <remap from="ref_pressure_in_dps" to="/dps310_2/data" />
