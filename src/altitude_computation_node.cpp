@@ -39,16 +39,17 @@ private:
     double hb = 0.0;
     double g = 9.80665;
     double R = 8.3144598;
+    double Rd = 287.0;
     double M = 0.0289644;
     double P0 = 101325.0;
 
     bool is_first_altitude = true;
     bool is_first_msg = true;
-    bool first_ref_altitude_msg_received_setra = false;
-    bool first_ref_altitude_msg_received_dps = false;
+    bool first_ref_pressure_msg_received_setra = false;
+    bool first_ref_pressure_msg_received_dps = false;
     bool first_ref_temp_msg_received = false;
-    bool is_first_msg_ref_altitude_setra = true;
-    bool is_first_msg_ref_altitude_dps = true;
+    bool is_first_msg_ref_pressure_setra = true;
+    bool is_first_msg_ref_pressure_dps = true;
     bool is_first_msg_ref_temp = true;
 
     double initial_altitude = 0.0;
@@ -57,10 +58,10 @@ private:
     bool useSetra;
     sensor_msgs::msg::Temperature lastRefTempMeasurement;
     std::mutex lastRefTempMutex;
-    double lastRefAltitudeMeasurementSetra;
-    std::mutex lastRefAltitudeSetraMutex;
-    double lastRefAltitudeMeasurementDPS;
-    std::mutex lastRefAltitudeDPSMutex;
+    sensor_msgs::msg::FluidPressure lastRefPressureMeasurementSetra;
+    std::mutex lastRefPressureSetraMutex;
+    rtf_sensors_msgs::msg::CustomPressureTemperature lastRefPressureMeasurementDPS;
+    std::mutex lastRefPressureDPSMutex;
 
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr altitudePub;
     rclcpp::Subscription<sensor_msgs::msg::FluidPressure>::SharedPtr refPressureInSetra;
@@ -81,21 +82,21 @@ private:
         this->lastRefTempMutex.unlock();
         if (this->useSetra)
         {
-            if (this->first_ref_altitude_msg_received_setra and this->first_ref_temp_msg_received)
+            if (this->first_ref_pressure_msg_received_setra and this->first_ref_temp_msg_received)
             {
-                this->lastRefAltitudeSetraMutex.lock();
-                double localRefAltitude = this->lastRefAltitudeMeasurementSetra;
-                this->lastRefAltitudeSetraMutex.unlock();
+                this->lastRefPressureSetraMutex.lock();
+                double localRefPressure = this->lastRefPressureMeasurementSetra.fluid_pressure;
+                this->lastRefPressureSetraMutex.unlock();
                 if (this->formula == "barometric")
                 {
                     double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-                    altitude = this->hb + ((this->Tb/this->Lb)*(exponent_part - 1)) - localRefAltitude; //Temperature needs to be in Kelvin
+                    double exponentSetra = std::pow(localRefPressure/this->Pb, (this->R*this->Lb)/(this->g*this->M));
+                    altitude =((this->Tb/this->Lb)*(exponentSetra - exponent_part)); //Temperature needs to be in Kelvin
                 }
                 else if (this->formula == "hypsometric")
                 {
                     // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
-                    double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-                    altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
+                    altitude = ((this->Rd * localRefTemperature)/this->g)*std::log(localRefPressure/P);
                 }
                 else
                 {
@@ -116,21 +117,21 @@ private:
         }
         else
         {
-            if (this->first_ref_altitude_msg_received_dps and this->first_ref_temp_msg_received)
+            if (this->first_ref_pressure_msg_received_dps and this->first_ref_temp_msg_received)
             {
-                this->lastRefAltitudeDPSMutex.lock();
-                double localRefAltitude = this->lastRefAltitudeMeasurementDPS;
-                this->lastRefAltitudeDPSMutex.unlock();
+                this->lastRefPressureDPSMutex.lock();
+                double localRefPressure = this->lastRefPressureMeasurementDPS.pressure;
+                this->lastRefPressureDPSMutex.unlock();
                 if (this->formula == "barometric")
                 {
+                    double exponent_dps = std::pow(localRefPressure/this->Pb, (this->R*this->Lb)/(this->g*this->M));
                     double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-                    altitude = this->hb + ((this->Tb/this->Lb)*(exponent_part - 1)) - localRefAltitude; //Temperature needs to be in Kelvin
+                    altitude = (this->Tb/this->Lb)*(exponent_dps - exponent_part); //Temperature needs to be in Kelvin
                 }
                 else if (this->formula == "hypsometric")
                 {
                     // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
-                    double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-                    altitude = this->hb - ((this->Tb/this->Lb)*(exponent_part - 1));
+                    altitude = ((this->Rd * localRefTemperature)/this->g)*std::log(localRefPressure/P);
                 }
                 else
                 {
@@ -164,28 +165,24 @@ private:
     }
     void refPressureSetraMsgCallback(const sensor_msgs::msg::FluidPressure &pressure_msg)
     {
-        double exponent_part = std::pow(pressure_msg.fluid_pressure/this->P0, (this->R*this->Lb)/(this->g*this->M));
-        double altitudeSetra = this->hb + ((this->Tb/this->Lb)*(exponent_part - 1)); //Temperature needs to be in Kelvin
-        this->lastRefAltitudeSetraMutex.lock();
-        this->lastRefAltitudeMeasurementSetra = altitudeSetra;
-        this->lastRefAltitudeSetraMutex.unlock();
-        if (this->is_first_msg_ref_altitude_setra)
+        this->lastRefPressureSetraMutex.lock();
+        this->lastRefPressureMeasurementSetra = pressure_msg;
+        this->lastRefPressureSetraMutex.unlock();
+        if (this->is_first_msg_ref_pressure_setra)
         {
-            this->first_ref_altitude_msg_received_setra = true;
-            this->is_first_msg_ref_altitude_setra = false;
+            this->first_ref_pressure_msg_received_setra = true;
+            this->is_first_msg_ref_pressure_setra = false;
         }
     }
     void refPressureDPSMsgCallback(const rtf_sensors_msgs::msg::CustomPressureTemperature &pressure_msg)
     {
-        double exponent_part = std::pow(pressure_msg.pressure/this->P0, (this->R*this->Lb)/(this->g*this->M));
-        double altitudeDPS = this->hb + ((this->Tb/this->Lb)*(exponent_part - 1)); //Temperature needs to be in Kelvin
-        this->lastRefAltitudeDPSMutex.lock();
-        this->lastRefAltitudeMeasurementDPS = altitudeDPS;
-        this->lastRefAltitudeDPSMutex.unlock();
-        if (this->is_first_msg_ref_altitude_dps)
+        this->lastRefPressureDPSMutex.lock();
+        this->lastRefPressureMeasurementDPS = pressure_msg;
+        this->lastRefPressureDPSMutex.unlock();
+        if (this->is_first_msg_ref_pressure_dps)
         {
-            this->first_ref_altitude_msg_received_dps = true;
-            this->is_first_msg_ref_altitude_dps = false;
+            this->first_ref_pressure_msg_received_dps = true;
+            this->is_first_msg_ref_pressure_dps = false;
         }
     }
 };
