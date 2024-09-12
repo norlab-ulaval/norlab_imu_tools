@@ -96,7 +96,7 @@ private:
                 else if (this->formula == "hypsometric")
                 {
                     // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
-                    altitude = ((this->Rd * localRefTemperature)/this->g)*std::log(localRefPressure/P);
+                    altitude = ((this->Rd * (localRefTemperature + 273.15))/this->g)*std::log(localRefPressure/P);
                 }
                 else
                 {
@@ -131,7 +131,7 @@ private:
                 else if (this->formula == "hypsometric")
                 {
                     // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
-                    altitude = ((this->Rd * localRefTemperature)/this->g)*std::log(localRefPressure/P);
+                    altitude = ((this->Rd * (localRefTemperature + 273.15))/this->g)*std::log(localRefPressure/P);
                 }
                 else
                 {
