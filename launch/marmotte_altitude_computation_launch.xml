@@ -3,9 +3,9 @@
     <arg name="formula" default="hypsometric"/>
     <node pkg="norlab_imu_tools" exec="altitude_computation_node" name="altitude_computation" output="screen">
         <remap from="ref_pressure_in_setra" to="/setra/pressure" />
-        <remap from="ref_pressure_in_dps" to="/dps310_2/data" />
+        <remap from="ref_pressure_in_dps" to="/dps310_2/filtered_pressure_temp_compensated" />
         <remap from="ref_temp_in" to="/mcp9808/temperature"/>
-        <remap from="sensor_pressure_in" to="/dps310_marmotte/data"/>
+        <remap from="sensor_pressure_in" to="/dps310_marmotte/filtered_pressure_temp_compensated"/>
         <remap from="altitude_out" to="/altitude" />
         <param name="formula" value="$(var formula)"/>
         <param name="use_setra" value="False" />
