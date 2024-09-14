@@ -1,6 +1,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/fluid_pressure.hpp>
 #include "rtf_sensors_msgs/msg/custom_pressure_temperature.hpp"
+#include "rtf_sensors_msgs/msg/pressure_temp_compensated.hpp"
 #include <sensor_msgs/msg/temperature.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <cmath>
@@ -73,9 +74,9 @@ private:
     {
         if (this->is_first_msg)
         {
-            this->P0 = pressure_msg.pressure_temp_compensated;
+            this->P0 = pressure_msg.pressure_temp_compensated.data;
         }
-        double P = pressure_msg.pressure_temp_compensated;
+        double P = pressure_msg.pressure_temp_compensated.data;
         double altitude = 0;
         this->lastRefTempMutex.lock();
         double localRefTemperature = this->lastRefTempMeasurement.temperature;
@@ -120,7 +121,7 @@ private:
             if (this->first_ref_pressure_msg_received_dps and this->first_ref_temp_msg_received)
             {
                 this->lastRefPressureDPSMutex.lock();
-                double localRefPressure = this->lastRefPressureMeasurementDPS.pressure_temp_compensated;
+                double localRefPressure = this->lastRefPressureMeasurementDPS.pressure_temp_compensated.data;
                 this->lastRefPressureDPSMutex.unlock();
                 if (this->formula == "barometric")
                 {
