@@ -15,13 +15,13 @@ public:
         refPressureInSetra = this->create_subscription<sensor_msgs::msg::FluidPressure>("ref_pressure_in_setra", 10,
                                                                                 std::bind(&altitudeComputation::refPressureSetraMsgCallback, this,
                                                                                           std::placeholders::_1));
-        refPressureInDPS = this->create_subscription<rtf_sensors_msgs::msg::CustomPressureTemperature>("ref_pressure_in_dps", 10,
+        refPressureInDPS = this->create_subscription<rtf_sensors_msgs::msg::PressureTempCompensated>("ref_pressure_in_dps", 10,
                                                                                 std::bind(&altitudeComputation::refPressureDPSMsgCallback, this,
                                                                                           std::placeholders::_1));
         refTempIn = this->create_subscription<sensor_msgs::msg::Temperature>("ref_temp_in", 10,
                                                                                 std::bind(&altitudeComputation::refTempMsgCallback, this,
                                                                                           std::placeholders::_1));
-        sensorPressureIn = this->create_subscription<rtf_sensors_msgs::msg::CustomPressureTemperature>("sensor_pressure_in", 10,
+        sensorPressureIn = this->create_subscription<rtf_sensors_msgs::msg::PressureTempCompensated>("sensor_pressure_in", 10,
                                                                                    std::bind(&altitudeComputation::pressureMsgCallback, this,
                                                                                              std::placeholders::_1));
         altitudePub = this->create_publisher<geometry_msgs::msg::PointStamped>("altitude_out", 10);
@@ -60,22 +60,22 @@ private:
     std::mutex lastRefTempMutex;
     sensor_msgs::msg::FluidPressure lastRefPressureMeasurementSetra;
     std::mutex lastRefPressureSetraMutex;
-    rtf_sensors_msgs::msg::CustomPressureTemperature lastRefPressureMeasurementDPS;
+    rtf_sensors_msgs::msg::PressureTempCompensated lastRefPressureMeasurementDPS;
     std::mutex lastRefPressureDPSMutex;
 
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr altitudePub;
     rclcpp::Subscription<sensor_msgs::msg::FluidPressure>::SharedPtr refPressureInSetra;
     rclcpp::Subscription<sensor_msgs::msg::Temperature>::SharedPtr refTempIn;
-    rclcpp::Subscription<rtf_sensors_msgs::msg::CustomPressureTemperature>::SharedPtr sensorPressureIn;
-    rclcpp::Subscription<rtf_sensors_msgs::msg::CustomPressureTemperature>::SharedPtr refPressureInDPS;
+    rclcpp::Subscription<rtf_sensors_msgs::msg::PressureTempCompensated>::SharedPtr sensorPressureIn;
+    rclcpp::Subscription<rtf_sensors_msgs::msg::PressureTempCompensated>::SharedPtr refPressureInDPS;
 
-    void pressureMsgCallback(const rtf_sensors_msgs::msg::CustomPressureTemperature &pressure_msg)
+    void pressureMsgCallback(const rtf_sensors_msgs::msg::PressureTempCompensated &pressure_msg)
     {
         if (this->is_first_msg)
         {
-            this->P0 = pressure_msg.pressure;
+            this->P0 = pressure_msg.pressure_temp_compensated;
         }
-        double P = pressure_msg.pressure;
+        double P = pressure_msg.pressure_temp_compensated;
         double altitude = 0;
         this->lastRefTempMutex.lock();
         double localRefTemperature = this->lastRefTempMeasurement.temperature;
@@ -120,7 +120,7 @@ private:
             if (this->first_ref_pressure_msg_received_dps and this->first_ref_temp_msg_received)
             {
                 this->lastRefPressureDPSMutex.lock();
-                double localRefPressure = this->lastRefPressureMeasurementDPS.pressure;
+                double localRefPressure = this->lastRefPressureMeasurementDPS.pressure_temp_compensated;
                 this->lastRefPressureDPSMutex.unlock();
                 if (this->formula == "barometric")
                 {
@@ -174,7 +174,7 @@ private:
             this->is_first_msg_ref_pressure_setra = false;
         }
     }
-    void refPressureDPSMsgCallback(const rtf_sensors_msgs::msg::CustomPressureTemperature &pressure_msg)
+    void refPressureDPSMsgCallback(const rtf_sensors_msgs::msg::PressureTempCompensated &pressure_msg)
     {
         this->lastRefPressureDPSMutex.lock();
         this->lastRefPressureMeasurementDPS = pressure_msg;
