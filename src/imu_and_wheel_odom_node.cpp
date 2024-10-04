@@ -43,6 +43,9 @@ public:
         this->declare_parameter<bool>("publish_odom", false);
         this->get_parameter("publish_odom", p_publish_odom_);
 
+        this->declare_parameter<bool>("force_2D", false);
+        this->get_parameter("force_2D", p_force_2d_);
+
         this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
         this->get_parameter("odom_topic_name", p_odom_topic_name_);
 
@@ -214,6 +217,7 @@ private:
     bool is_imu_mag_north_correction_set;
 
     bool p_publish_odom_;
+    bool p_force_2d_;
     std::string p_odom_topic_name_;
 //        ros::Publisher *odom_pub_;
     nav_msgs::msg::Odometry odom_msg_;
@@ -256,9 +260,26 @@ private:
         tmp_.normalize();
 
         current_attitude = tmp_;
-        transform_.setRotation(current_attitude);
-
-        transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
+        if(p_force_2d_)
+        {
+            const tf2::Matrix3x3 matrix(current_attitude);
+            double roll, pitch, yaw;
+            matrix.getRPY(roll, pitch, yaw);
+            current_attitude.setRPY(0.0, 0.0, yaw);
+            transform_.setRotation(current_attitude);
+        }
+        else
+        {
+            transform_.setRotation(current_attitude);
+        }
+        if(p_force_2d_)
+        {
+            transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), 0.0));
+        }
+        else
+        {
+            transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
+        }
         msg_stamp_ = rclcpp::Time(imu_msg.header.stamp);
         transform_.stamp_ = tf2::TimePoint(std::chrono::nanoseconds(msg_stamp_.nanoseconds()));
         tf2::convert(transform_, transform_msg_);
@@ -271,13 +292,30 @@ private:
         if(p_publish_odom_)
         {
             geometry_msgs::msg::Quaternion quat_msg;
-            tf2::convert(current_attitude, quat_msg);
+            if(p_force_2d_)
+            {
+                const tf2::Matrix3x3 matrix(current_attitude);
+                double roll, pitch, yaw;
+                matrix.getRPY(roll, pitch, yaw);
+                current_attitude.setRPY(0.0, 0.0, yaw);
+                tf2::convert(current_attitude, quat_msg);
+            }
+            else
+            {
+                tf2::convert(current_attitude, quat_msg);
+            }
             odom_msg_.pose.pose.orientation = quat_msg;
 
             odom_msg_.pose.pose.position.x = current_position.x();
             odom_msg_.pose.pose.position.y = current_position.y();
-            odom_msg_.pose.pose.position.z = current_position.z();
-
+            if(p_force_2d_)
+            {
+                odom_msg_.pose.pose.position.z = 0.0;
+            }
+            else
+            {
+                odom_msg_.pose.pose.position.z = current_position.z();
+            }
             odom_msg_.twist.twist.linear.x = current_linear_vel.x();
             odom_msg_.twist.twist.linear.y = current_linear_vel.y();
             odom_msg_.twist.twist.linear.z = current_linear_vel.z();

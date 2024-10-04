@@ -9,6 +9,7 @@
     <param name="odom_frame" value="odom" />
     <param name="base_frame" value="base_link" />
     <param name="publish_translation" value="True" />
+    <param name="force_2D" value="True" />
 
     ## If odom message needed
     <param name="publish_odom" value="True" />
