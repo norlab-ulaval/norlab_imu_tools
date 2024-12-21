@@ -22,6 +22,7 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <cmath>
 #include <sstream>
+#include <stdexcept>
 
 using namespace std::chrono_literals;
 #define MISSED_ODOM_MSG_SAFETY_MULTIPLIER 6.0
@@ -90,6 +91,10 @@ public:
         sensor_msgs::msg::Imu imu_msg;
         std::string imu_frame;
 
+        // rclcpp::node_interfaces::NodeTopics node_topics;
+
+        std::string actual_topic_name = this->get_node_topics_interface()->resolve_topic_name("imu_topic", false);
+
         auto sub = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic", 1, [](const std::shared_ptr<const sensor_msgs::msg::Imu>&) {});
         auto response =  rclcpp::wait_for_message<sensor_msgs::msg::Imu, int64_t, std::milli>(imu_msg, sub, this->get_node_options().context(), 5s);
 
@@ -99,11 +104,10 @@ public:
         }
         else
         {
-            throw rclcpp::exceptions::InvalidTopicNameError(this->get_namespace(),
-                                                            "No IMU message received."
-                                                            "\nCannot find the tf between base_link and IMU without the IMU frame name."
-                                                            "\nPlease make sure the IMU messages are published.",
-                                                            0);
+            RCLCPP_ERROR_STREAM(this->get_logger(), "No IMU message received." <<
+                                    "\nCannot find the tf between " << p_base_frame_ << " and the IMU without the IMU frame name."
+                                    << "\nPlease make sure the IMU messages are published on topic " << actual_topic_name);
+            throw std::runtime_error("");
         }
 
         // Quaternion for IMU alignment
