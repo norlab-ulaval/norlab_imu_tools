@@ -462,10 +462,6 @@ private:
     }
     void altitudeMsgCallback(const geometry_msgs::msg::PointStamped& altitude_msg)
     {
-
-        //prepare variables
-        tf2::Vector3 new_position;
-
         //check for nonsense data
         if(std::isnan(altitude_msg.point.x) ||
            std::isnan(altitude_msg.point.y) ||
