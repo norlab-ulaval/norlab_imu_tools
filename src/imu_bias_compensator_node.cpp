@@ -11,6 +11,13 @@ public:
     imuBiasCompensatorNode() :
             Node("imu_bias_compensator_node")
     {
+        // Parameters
+        declare_parameter("bias_x", 0.0);
+        declare_parameter("bias_y", 0.0);
+        declare_parameter("bias_z", 0.0);
+        xBias = get_parameter("bias_x").as_double();
+        yBias = get_parameter("bias_y").as_double();
+        zBias = get_parameter("bias_z").as_double();
         biasSub = this->create_subscription<geometry_msgs::msg::Vector3Stamped>("bias_topic_in", 10,
                                                                                 std::bind(&imuBiasCompensatorNode::biasMsgCallback, this,
                                                                                            std::placeholders::_1));
@@ -34,7 +41,7 @@ private:
         this->xBias = biasMsg.vector.x;
         this->yBias = biasMsg.vector.y;
         this->zBias = biasMsg.vector.z;
-        RCLCPP_INFO(this->get_logger(), "Bias acquired.");
+        RCLCPP_INFO(this->get_logger(), "Bias updated from topic.");
     }
 
     void imuMsgCallback(const sensor_msgs::msg::Imu &imuMsg) {
