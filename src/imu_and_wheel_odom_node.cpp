@@ -299,50 +299,50 @@ private:
         current_attitude = tmp_;
         transform_.setRotation(current_attitude);
 
-//         geometry_msgs::msg::TransformStamped currentAltiToImuTf = tfBuffer->lookupTransform(imu_msg.header.frame_id, p_altimeter_frame_, imu_msg.header.stamp,
-//                                                                                             std::chrono::milliseconds(100));
-//         geometry_msgs::msg::Pose AltiPoseInImuFrame;
-//         AltiPoseInImuFrame.position.x = currentAltiToImuTf.transform.translation.x;
-//         AltiPoseInImuFrame.position.y = currentAltiToImuTf.transform.translation.y;
-//         AltiPoseInImuFrame.position.z = currentAltiToImuTf.transform.translation.z;
-//         AltiPoseInImuFrame.orientation = currentAltiToImuTf.transform.rotation;
+        geometry_msgs::msg::TransformStamped currentAltiToImuTf = tfBuffer->lookupTransform(imu_msg.header.frame_id, p_altimeter_frame_, imu_msg.header.stamp,
+                                                                                            std::chrono::milliseconds(100));
+        geometry_msgs::msg::Pose AltiPoseInImuFrame;
+        AltiPoseInImuFrame.position.x = currentAltiToImuTf.transform.translation.x;
+        AltiPoseInImuFrame.position.y = currentAltiToImuTf.transform.translation.y;
+        AltiPoseInImuFrame.position.z = currentAltiToImuTf.transform.translation.z;
+        AltiPoseInImuFrame.orientation = currentAltiToImuTf.transform.rotation;
 
-//         geometry_msgs::msg::TransformStamped imuToOdomTfQuaternion;
-//         imuToOdomTfQuaternion.transform.rotation = imu_msg.orientation;
+        geometry_msgs::msg::TransformStamped imuToOdomTfQuaternion;
+        imuToOdomTfQuaternion.transform.rotation = imu_msg.orientation;
 
-//         geometry_msgs::msg::Pose altiPoseInOdomFrame;
-//         tf2::doTransform(AltiPoseInImuFrame, altiPoseInOdomFrame, imuToOdomTfQuaternion);
+        geometry_msgs::msg::Pose altiPoseInOdomFrame;
+        tf2::doTransform(AltiPoseInImuFrame, altiPoseInOdomFrame, imuToOdomTfQuaternion);
 
-//         geometry_msgs::msg::TransformStamped altiToOdomTf;
-//         lastAltitudeAltiFrameMutex.lock();
-//         altiToOdomTf.transform.translation.z = lastAltitudeMeasurementAltiFrame;
-//         lastAltitudeAltiFrameMutex.unlock();
-//         altiToOdomTf.transform.rotation = altiPoseInOdomFrame.orientation;
+        geometry_msgs::msg::TransformStamped altiToOdomTf;
+        lastAltitudeAltiFrameMutex.lock();
+        altiToOdomTf.transform.translation.z = lastAltitudeMeasurementAltiFrame;
+        lastAltitudeAltiFrameMutex.unlock();
+        altiToOdomTf.transform.rotation = altiPoseInOdomFrame.orientation;
 
-//         geometry_msgs::msg::TransformStamped robotToAltiFrameTf = tfBuffer->lookupTransform(p_altimeter_frame_, p_base_frame_, imu_msg.header.stamp,
-//                                                                                             std::chrono::milliseconds(100));
-//         geometry_msgs::msg::Pose robotPoseInAltiFrame;
-//         robotPoseInAltiFrame.position.x = robotToAltiFrameTf.transform.translation.x;
-//         robotPoseInAltiFrame.position.y = robotToAltiFrameTf.transform.translation.y;
-//         robotPoseInAltiFrame.position.z = robotToAltiFrameTf.transform.translation.z;
-//         robotPoseInAltiFrame.orientation = robotToAltiFrameTf.transform.rotation;
-//         geometry_msgs::msg::Pose altitudeRobotInOdomFrame;
-//         tf2::doTransform(robotPoseInAltiFrame, altitudeRobotInOdomFrame, altiToOdomTf);
-//         if (isFirstAltitude)
-//         {
-//             firstAltitudeMeasurementCorrectFrame = altitudeRobotInOdomFrame.position.z;
-//             isFirstAltitude = false;
-// //            RCLCPP_INFO(this->get_logger(), "First Altitude measurement value: %f", firstAltitudeMeasurementCorrectFrame);
-//         }
-//         if (p_use_altitude_){
-//         lastAltitudeMutex.lock();
-//         lastAltitudeMeasurementCorrectFrame = altitudeRobotInOdomFrame.position.z - firstAltitudeMeasurementCorrectFrame;
-//         current_position = tf2::Vector3(current_position.x(),
-//                                         current_position.y(),
-//                                         lastAltitudeMeasurementCorrectFrame);
-// //        RCLCPP_INFO(this->get_logger(), "Last Altitude measurement value: %f", lastAltitudeMeasurementCorrectFrame);
-//         lastAltitudeMutex.unlock();
-//         }
+        geometry_msgs::msg::TransformStamped robotToAltiFrameTf = tfBuffer->lookupTransform(p_altimeter_frame_, p_base_frame_, imu_msg.header.stamp,
+                                                                                            std::chrono::milliseconds(100));
+        geometry_msgs::msg::Pose robotPoseInAltiFrame;
+        robotPoseInAltiFrame.position.x = robotToAltiFrameTf.transform.translation.x;
+        robotPoseInAltiFrame.position.y = robotToAltiFrameTf.transform.translation.y;
+        robotPoseInAltiFrame.position.z = robotToAltiFrameTf.transform.translation.z;
+        robotPoseInAltiFrame.orientation = robotToAltiFrameTf.transform.rotation;
+        geometry_msgs::msg::Pose altitudeRobotInOdomFrame;
+        tf2::doTransform(robotPoseInAltiFrame, altitudeRobotInOdomFrame, altiToOdomTf);
+        if (isFirstAltitude)
+        {
+            firstAltitudeMeasurementCorrectFrame = altitudeRobotInOdomFrame.position.z;
+            isFirstAltitude = false;
+//            RCLCPP_INFO(this->get_logger(), "First Altitude measurement value: %f", firstAltitudeMeasurementCorrectFrame);
+        }
+        if (p_use_altitude_){
+        lastAltitudeMutex.lock();
+        lastAltitudeMeasurementCorrectFrame = altitudeRobotInOdomFrame.position.z - firstAltitudeMeasurementCorrectFrame;
+        current_position = tf2::Vector3(current_position.x(),
+                                        current_position.y(),
+                                        lastAltitudeMeasurementCorrectFrame);
+//        RCLCPP_INFO(this->get_logger(), "Last Altitude measurement value: %f", lastAltitudeMeasurementCorrectFrame);
+        lastAltitudeMutex.unlock();
+        }
         
         transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
         msg_stamp_ = rclcpp::Time(imu_msg.header.stamp);
