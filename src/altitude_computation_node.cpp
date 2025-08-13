@@ -78,78 +78,83 @@ private:
         }
         double P = pressure_msg.pressure_temp_compensated.data;
         double altitude = 0;
-        this->lastRefTempMutex.lock();
-        double localRefTemperature = this->lastRefTempMeasurement.temperature;
-        this->lastRefTempMutex.unlock();
-        if (this->useSetra)
+        if (this->first_ref_temp_msg_received)
         {
-            if (this->first_ref_pressure_msg_received_setra and this->first_ref_temp_msg_received)
+            this->lastRefTempMutex.lock();
+            double localRefTemperature = this->lastRefTempMeasurement.temperature;
+            this->lastRefTempMutex.unlock();
+            if (this->useSetra)
             {
-                this->lastRefPressureSetraMutex.lock();
-                double localRefPressure = this->lastRefPressureMeasurementSetra.fluid_pressure;
-                this->lastRefPressureSetraMutex.unlock();
-                if (this->formula == "barometric")
+                if (this->first_ref_pressure_msg_received_setra)
                 {
-                    double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-                    double exponentSetra = std::pow(localRefPressure/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-                    altitude =((this->Tb/this->Lb)*(exponentSetra - exponent_part)); //Temperature needs to be in Kelvin
+                    this->lastRefPressureSetraMutex.lock();
+                    double localRefPressure = this->lastRefPressureMeasurementSetra.fluid_pressure;
+                    this->lastRefPressureSetraMutex.unlock();
+                    if (this->formula == "barometric")
+                    {
+                        double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
+                        double exponentSetra = std::pow(localRefPressure/this->Pb, (this->R*this->Lb)/(this->g*this->M));
+                        altitude =((this->Tb/this->Lb)*(exponentSetra - exponent_part)); //Temperature needs to be in Kelvin
+                    }
+                    else if (this->formula == "hypsometric")
+                    {
+                        // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
+                        altitude = ((this->Rd * (localRefTemperature + 273.15))/this->g)*std::log(localRefPressure/P);
+                    }
+                    else
+                    {
+                        altitude = ((this->R * (localRefTemperature + 273.15))/this->g) * std::log(this->P0/P);
+                    }
+                                    if (this->is_first_altitude)
+                {
+                    this->initial_altitude = altitude;
+                    this->is_first_altitude = false;
+                    RCLCPP_INFO(this->get_logger(), "Initial altitude computed: %f, initial pressure message: %f", this->initial_altitude, this->P0);
                 }
-                else if (this->formula == "hypsometric")
-                {
-                    // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
-                    altitude = ((this->Rd * (localRefTemperature + 273.15))/this->g)*std::log(localRefPressure/P);
-                }
-                else
-                {
-                    altitude = ((this->R * (localRefTemperature + 273.15))/this->g) * std::log(this->P0/P);
+                geometry_msgs::msg::PointStamped output_msg;
+                output_msg.header = pressure_msg.header;
+                output_msg.point.x = 0.0;
+                output_msg.point.y = 0.0;
+                output_msg.point.z = altitude - this->initial_altitude;
+                altitudePub->publish(output_msg);
                 }
             }
-            if (this->is_first_altitude)
+            else
             {
-                this->initial_altitude = altitude;
-                this->is_first_altitude = false;
-            }
-            geometry_msgs::msg::PointStamped output_msg;
-            output_msg.header = pressure_msg.header;
-            output_msg.point.x = 0.0;
-            output_msg.point.y = 0.0;
-            output_msg.point.z = altitude - this->initial_altitude;
-            altitudePub->publish(output_msg);
-        }
-        else
-        {
-            if (this->first_ref_pressure_msg_received_dps and this->first_ref_temp_msg_received)
-            {
-                this->lastRefPressureDPSMutex.lock();
-                double localRefPressure = this->lastRefPressureMeasurementDPS.pressure_temp_compensated.data;
-                this->lastRefPressureDPSMutex.unlock();
-                if (this->formula == "barometric")
+                if (this->first_ref_pressure_msg_received_dps)
                 {
-                    double exponent_dps = std::pow(localRefPressure/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-                    double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
-                    altitude = (this->Tb/this->Lb)*(exponent_dps - exponent_part); //Temperature needs to be in Kelvin
-                }
-                else if (this->formula == "hypsometric")
-                {
-                    // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
-                    altitude = ((this->Rd * (localRefTemperature + 273.15))/this->g)*std::log(localRefPressure/P);
-                }
-                else
-                {
-                    altitude = ((this->R * (localRefTemperature + 273.15))/this->g) * std::log(this->P0/P);
+                    this->lastRefPressureDPSMutex.lock();
+                    double localRefPressure = this->lastRefPressureMeasurementDPS.pressure_temp_compensated.data;
+                    this->lastRefPressureDPSMutex.unlock();
+                    if (this->formula == "barometric")
+                    {
+                        double exponent_dps = std::pow(localRefPressure/this->Pb, (this->R*this->Lb)/(this->g*this->M));
+                        double exponent_part = std::pow(P/this->Pb, (this->R*this->Lb)/(this->g*this->M));
+                        altitude = (this->Tb/this->Lb)*(exponent_dps - exponent_part); //Temperature needs to be in Kelvin
+                    }
+                    else if (this->formula == "hypsometric")
+                    {
+                        // assuming the virtual temperature is the temperature measured by the dps sensor. in Kelvins
+                        altitude = ((this->Rd * (localRefTemperature + 273.15))/this->g)*std::log(localRefPressure/P);
+                    }
+                    else
+                    {
+                        altitude = ((this->R * (localRefTemperature + 273.15))/this->g) * std::log(this->P0/P);
+                    }
+                    if (this->is_first_altitude)
+                    {
+                        this->initial_altitude = altitude;
+                        this->is_first_altitude = false;
+                        RCLCPP_INFO(this->get_logger(), "Initial altitude computed: %f, initial pressure message: %f, localRefPressure: %f", this->initial_altitude, this->P0, localRefPressure);
+                    }
+                    geometry_msgs::msg::PointStamped output_msg;
+                    output_msg.header = pressure_msg.header;
+                    output_msg.point.x = 0.0;
+                    output_msg.point.y = 0.0;
+                    output_msg.point.z = altitude - this->initial_altitude;
+                    altitudePub->publish(output_msg);
                 }
             }
-            if (this->is_first_altitude)
-            {
-                this->initial_altitude = altitude;
-                this->is_first_altitude = false;
-            }
-            geometry_msgs::msg::PointStamped output_msg;
-            output_msg.header = pressure_msg.header;
-            output_msg.point.x = 0.0;
-            output_msg.point.y = 0.0;
-            output_msg.point.z = altitude - this->initial_altitude;
-            altitudePub->publish(output_msg);
         }
         
     }
