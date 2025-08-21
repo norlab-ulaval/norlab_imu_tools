@@ -66,7 +66,7 @@ private:
 
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr altitudePub;
     rclcpp::Subscription<sensor_msgs::msg::FluidPressure>::SharedPtr refPressureInSetra;
-    rclcpp::Subscription<sensor_msgs::msg::Temperature>::SharedPtr refTempIn;
+    rclcpp::Subscription<rtf_sensors_msgs::msg::CustomPressureTemperature>::SharedPtr refTempIn;
     rclcpp::Subscription<rtf_sensors_msgs::msg::PressureTempCompensated>::SharedPtr sensorPressureIn;
     rclcpp::Subscription<rtf_sensors_msgs::msg::PressureTempCompensated>::SharedPtr refPressureInDPS;
 
