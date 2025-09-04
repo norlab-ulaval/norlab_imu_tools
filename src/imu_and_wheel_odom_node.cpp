@@ -116,52 +116,68 @@ public:
             throw rclcpp::exceptions::NameValidationError("frame", this->get_namespace(), "IMU frame cannot be empty.", 0);
         }
         else
-        { // Get IMU->base_link tf
+        { // Get IMU->base_link alignment
             if(imu_frame[0] == '/')
             {
                 throw rclcpp::exceptions::NameValidationError("frame", this->get_namespace(), "In ROS 2, IMU frame name cannot start with '/'", 0);
             }
-            RCLCPP_DEBUG(this->get_logger(), "Waiting for transform between %s and base_link frames", imu_frame.c_str());
+            
+            // Fall back to TF lookup
+            RCLCPP_INFO(this->get_logger(), "No imu_alignment_rpy parameter found, falling back to TF lookup");
+            RCLCPP_DEBUG(this->get_logger(), "Waiting for transform between %s and %s frames", 
+                        imu_frame.c_str(), p_base_frame_.c_str());
 
-            std::unique_ptr<tf2_ros::Buffer> tf_buffer = std::make_unique<tf2_ros::Buffer>(this->get_clock());
-            std::shared_ptr<tf2_ros::TransformListener> tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
-            geometry_msgs::msg::TransformStamped tf_imu_bl;
-            try
+            tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+            tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+            bool transform_found = false;
+            
+            // Wait for transform to become available
+            for(int attempts = 0; attempts < 500 && !transform_found; attempts++)
             {
-//					wait for the buffer to be filled
-//					skipping this would make several
-//					'Warning: Invalid frame ID "imu" passed to canTransform argument target_frame - frame does not exist
-//					 at line 93 in ./src/buffer_core.cpp' show up in the log.
-                unsigned int ctr = 0;
-                const unsigned int ctr_max = 100;
-                auto sleep_duration_ms = 10ms;
-                while(!tf_buffer->_frameExists(imu_frame))
+                try
                 {
-                    ctr++;
-                    rclcpp::sleep_for(sleep_duration_ms);
-                    if(ctr >= ctr_max)
-                    {
-                        throw tf2::TimeoutException("tf2 lookup timeout after: " +
-                                                    std::to_string(ctr_max * sleep_duration_ms.count()) + " ms. IMU frame " + imu_frame + " doesn't exist");
-                    }
+                    // Look up base_link -> imu_frame
+                    tf_imu_bl = tf_buffer_->lookupTransform(p_base_frame_, imu_frame, tf2::TimePointZero, tf2::durationFromSec(0.1));
+                    transform_found = true;
+                    RCLCPP_DEBUG(this->get_logger(), "Transform found after %d attempts", attempts);
                 }
-                RCLCPP_DEBUG(this->get_logger(), "Transform available after %d attempts", ctr);
-                tf_imu_bl = tf_buffer->lookupTransform(imu_frame, p_base_frame_, this->now());
+                catch(const tf2::TransformException& ex)
+                {
+                    if(attempts % 50 == 0) // Log every 50 attempts (every second)
+                    {
+                        RCLCPP_WARN(this->get_logger(), "Waiting for transform %s->%s: %s", 
+                                imu_frame.c_str(), p_base_frame_.c_str(), ex.what());
+                    }
+                    rclcpp::sleep_for(20ms);
+                }
             }
-            catch(const tf2::TransformException& ex)
+                
+            if(!transform_found)
             {
-                RCLCPP_ERROR(this->get_logger(), "Unable to get tf between IMU and base_link (%s->%s): %s", imu_frame.c_str(),
-                             p_base_frame_.c_str(), ex.what());
-                throw ex;
+                RCLCPP_WARN(this->get_logger(), "TF lookup failed, trying to get transform from /tf_static topic...");
+                if(getTransformFromStaticTopic(p_base_frame_, imu_frame, tf_imu_bl))
+                {
+                    RCLCPP_INFO(this->get_logger(), "Transform found from /tf_static topic.");
+                    transform_found = true;
+                }
+                else
+                {
+                    RCLCPP_ERROR(this->get_logger(), "Unable to get tf between IMU and base_link (%s->%s) after 10 seconds", 
+                                imu_frame.c_str(), p_base_frame_.c_str());
+                    throw std::runtime_error("TF lookup timeout");
+                }
             }
+            
             tf2::Quaternion quat;
             tf2::fromMsg(tf_imu_bl.transform.rotation, quat);
+            
             const tf2::Matrix3x3 matrix(quat);
             double roll, pitch, yaw;
             matrix.getRPY(roll, pitch, yaw);
-            // Evaluate alignment quternion
+            
             imu_alignment_.setRPY(roll, pitch, yaw);
-            RCLCPP_INFO(this->get_logger(), "RPY from TF: %f, %f, %f", roll, pitch, yaw);
+            RCLCPP_INFO(this->get_logger(), "TF-based IMU alignment RPY: %f, %f, %f", roll, pitch, yaw);
         }
 
         this->declare_parameter<double>("mag_north_correction_yaw", 0.0);
@@ -208,7 +224,10 @@ private:
     std::string p_odom_frame_;
     std::string p_base_frame_;
     //tf stuff
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     tf2::Stamped<tf2::Transform> transform_;
+    geometry_msgs::msg::TransformStamped tf_imu_bl;
     geometry_msgs::msg::TransformStamped transform_msg_;
     tf2::Quaternion tmp_;
     tf2::Quaternion current_attitude;
@@ -400,6 +419,36 @@ private:
         }
 
         previous_w_odom_stamp = wheel_odom_msg.header.stamp;
+    }
+
+    bool getTransformFromStaticTopic(const std::string& target_frame, const std::string& source_frame,
+                                        geometry_msgs::msg::TransformStamped& result_transform)
+    {
+        auto qos = rclcpp::QoS(rclcpp::KeepLast(100))
+            .reliability(rclcpp::ReliabilityPolicy::Reliable)
+            .durability(rclcpp::DurabilityPolicy::TransientLocal);
+            
+        auto sub = this->create_subscription<tf2_msgs::msg::TFMessage>(
+            "/tf_static", qos,
+            [](const tf2_msgs::msg::TFMessage::SharedPtr) {});
+            
+        tf2_msgs::msg::TFMessage tf_msg;
+        auto response = rclcpp::wait_for_message<tf2_msgs::msg::TFMessage>(tf_msg, sub, 
+                                                    this->get_node_options().context(), 5s);
+        
+        if(response)
+        {
+            for(const auto& transform : tf_msg.transforms)
+            {
+                if((transform.header.frame_id == target_frame && transform.child_frame_id == source_frame) ||
+                    (transform.header.frame_id == source_frame && transform.child_frame_id == target_frame))
+                {
+                    result_transform = transform;
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 };
 
