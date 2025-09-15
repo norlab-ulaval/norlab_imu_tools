@@ -22,6 +22,7 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <cmath>
 #include <sstream>
+#include <rclcpp/logging.hpp>
 #include <stdexcept>
 
 using namespace std::chrono_literals;
@@ -93,7 +94,7 @@ public:
         std::string actual_topic_name = this->get_node_topics_interface()->resolve_topic_name("imu_topic", false);
 
         auto sub = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic", 1, [](const std::shared_ptr<const sensor_msgs::msg::Imu>&) {});
-        auto response =  rclcpp::wait_for_message<sensor_msgs::msg::Imu, int64_t, std::milli>(imu_msg, sub, this->get_node_options().context(), 5s);
+        auto response =  rclcpp::wait_for_message<sensor_msgs::msg::Imu, int64_t, std::milli>(imu_msg, sub, this->get_node_options().context(), 50s);
 
         if(response)
         {
@@ -364,12 +365,13 @@ private:
                                                           wheel_odom_msg.twist.twist.linear.y,
                                                           wheel_odom_msg.twist.twist.linear.z);
             // time increment
-            double delta_t = (rclcpp::Time(wheel_odom_msg.header.stamp) - previous_w_odom_stamp).seconds();
+            auto time = rclcpp::Time(wheel_odom_msg.header.stamp);
+            double delta_t = (time - previous_w_odom_stamp).seconds();
 
             if(delta_t < 1e-7)
             {
-                RCLCPP_WARN(this->get_logger(),
-                            "Received wheel odometry message with negative or zero time increment, ignoring that one and starting from the next one.");
+                RCLCPP_WARN_STREAM(this->get_logger(),
+                            "Received wheel odometry message with negative or zero time increment. Prev: " << previous_w_odom_stamp.nanoseconds() << ", current: " << time.nanoseconds() << ", diff: " << delta_t << ". Ignoring that one and starting from the next one.");
                 initial_wheel_odom_received = false;
                 return;
             }
