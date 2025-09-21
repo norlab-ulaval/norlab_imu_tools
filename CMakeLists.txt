@@ -20,6 +20,9 @@ include_directories(
 install(DIRECTORY launch
         DESTINATION share/${PROJECT_NAME})
 
+install(DIRECTORY config
+        DESTINATION share/${PROJECT_NAME})
+
 add_executable(imu_bias_observer src/imu_bias_observer.cpp)
 ament_target_dependencies(imu_bias_observer
         rclcpp

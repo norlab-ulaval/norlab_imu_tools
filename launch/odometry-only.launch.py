@@ -16,7 +16,7 @@ LIDAR_TYPE = "robosense"
 
 def generate_launch_description():
     ld = LaunchDescription()
-    share_folder = get_package_share_directory("norlab_icp_mapper_ros")
+    share_folder = get_package_share_directory("norlab_imu_tools")
 
     ld.add_action(
         DeclareLaunchArgument(
