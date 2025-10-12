@@ -6,10 +6,8 @@ from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import LaunchConfiguration
 from launch import LaunchDescription
 
-INPUT_PATH = "/"
-
 IS_MAPPING = True
-INPUT_IMU_BIAS_FILE = os.path.join(INPUT_PATH, "calib", "imu.json")
+INPUT_IMU_BIAS_FILE = "/calib/imu.json"
 IMU_TYPE = "vectornav"  # or 'xsens'
 LIDAR_TYPE = "robosense"
 
@@ -36,11 +34,14 @@ def generate_launch_description():
         bias_y = 0.0
         bias_z = 0.0
 
-        with open(INPUT_IMU_BIAS_FILE, "r") as f:
-            bias_data = json.load(f)
-            bias_x = bias_data[IMU_TYPE]["angular_velocities"]["x"]
-            bias_y = bias_data[IMU_TYPE]["angular_velocities"]["y"]
-            bias_z = bias_data[IMU_TYPE]["angular_velocities"]["z"]
+        if os.path.exists(INPUT_IMU_BIAS_FILE):
+            with open(INPUT_IMU_BIAS_FILE, "r") as f:
+                bias_data = json.load(f)
+                bias_x = bias_data[IMU_TYPE]["angular_velocity"]["x"]
+                bias_y = bias_data[IMU_TYPE]["angular_velocity"]["y"]
+                bias_z = bias_data[IMU_TYPE]["angular_velocity"]["z"]
+        else:
+            print("No bias file found, using default values")
 
         print(f"Biases: x={bias_x}, y={bias_y}, z={bias_z}")
         bias_compensator_node = Node(
