@@ -28,7 +28,8 @@ public:
     imuBiasObserverNode() :
             Node("imu_bias_observer_node")
     {
-        bias_pub = this->create_publisher<geometry_msgs::msg::Vector3Stamped>("bias_topic_out", 10);
+        gyro_bias_pub = this->create_publisher<geometry_msgs::msg::Vector3Stamped>("gyro_bias_topic_out", 10);
+        accel_bias_pub = this->create_publisher<geometry_msgs::msg::Vector3Stamped>("accel_bias_topic_out", 10);
 
         imu_subscription = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic_in", 10,
                                                                             std::bind(&imuBiasObserverNode::imuMsgCallback, this,
@@ -44,11 +45,19 @@ private:
     double angular_velocity_sum_x = 0.0;
     double angular_velocity_sum_y = 0.0;
     double angular_velocity_sum_z = 0.0;
+
+    double linear_acceleration_sum_x = 0.0;
+    double linear_acceleration_sum_y = 0.0;
+    double linear_acceleration_sum_z = 0.0;
+
+    const double GRAVITY = 9.80665;
+
     int number_of_samples = 0;
     int target_observation_samples = 4000;
     bool observe_now = false;
 
-    rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr bias_pub;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr gyro_bias_pub;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr accel_bias_pub;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscription;
 
     void imuMsgCallback(const sensor_msgs::msg::Imu &imu_msg) {
@@ -59,21 +68,47 @@ private:
                 angular_velocity_sum_x += imu_msg.angular_velocity.x;
                 angular_velocity_sum_y += imu_msg.angular_velocity.y;
                 angular_velocity_sum_z += imu_msg.angular_velocity.z;
+
+                linear_acceleration_sum_x += imu_msg.linear_acceleration.x;
+                linear_acceleration_sum_y += imu_msg.linear_acceleration.y;
+                linear_acceleration_sum_z += imu_msg.linear_acceleration.z;
+
                 number_of_samples += 1;
 
                 if(number_of_samples % (target_observation_samples/5) == 0){
-                    RCLCPP_INFO(this->get_logger(), "IMU bias observer: Collected %d samples (%d\%) of %d.", number_of_samples, (100*number_of_samples/target_observation_samples), target_observation_samples);
+                    RCLCPP_INFO(this->get_logger(), "IMU bias observer: Collected %d samples (%d%%) of %d.", number_of_samples, (100*number_of_samples/target_observation_samples), target_observation_samples);
                 }
 
             }
             else
             {
-                geometry_msgs::msg::Vector3Stamped bias_msg;
-                bias_msg.header.stamp = this->now();;
-                bias_msg.vector.x = angular_velocity_sum_x / double(number_of_samples);
-                bias_msg.vector.y = angular_velocity_sum_y / double(number_of_samples);
-                bias_msg.vector.z = angular_velocity_sum_z / double(number_of_samples);
-                bias_pub->publish(bias_msg);
+                geometry_msgs::msg::Vector3Stamped gyro_bias_msg;
+                gyro_bias_msg.header.stamp = this->now();
+                gyro_bias_msg.vector.x = angular_velocity_sum_x / double(number_of_samples);
+                gyro_bias_msg.vector.y = angular_velocity_sum_y / double(number_of_samples);
+                gyro_bias_msg.vector.z = angular_velocity_sum_z / double(number_of_samples);
+
+
+                double mean_linear_acceleration_x = linear_acceleration_sum_x / double(number_of_samples);
+                double mean_linear_acceleration_y = linear_acceleration_sum_y / double(number_of_samples);
+                double mean_linear_acceleration_z = linear_acceleration_sum_z / double(number_of_samples);
+
+                double gravity_magnitude = std::sqrt(mean_linear_acceleration_x * mean_linear_acceleration_x +
+                                                     mean_linear_acceleration_y * mean_linear_acceleration_y +
+                                                     mean_linear_acceleration_z * mean_linear_acceleration_z);
+
+                double gravity_orientation_x = mean_linear_acceleration_x / gravity_magnitude;
+                double gravity_orientation_y = mean_linear_acceleration_y / gravity_magnitude;
+                double gravity_orientation_z = mean_linear_acceleration_z / gravity_magnitude;
+
+                geometry_msgs::msg::Vector3Stamped accel_bias_msg;
+                accel_bias_msg.header.stamp = this->now();
+                accel_bias_msg.vector.x = mean_linear_acceleration_x - gravity_orientation_x * GRAVITY;
+                accel_bias_msg.vector.y = mean_linear_acceleration_y - gravity_orientation_y * GRAVITY;
+                accel_bias_msg.vector.z = mean_linear_acceleration_z - gravity_orientation_z * GRAVITY;
+
+                gyro_bias_pub->publish(gyro_bias_msg);
+                accel_bias_pub->publish(accel_bias_msg);
 
                 observe_now = false;
                 RCLCPP_WARN(this->get_logger(), "IMU bias observer: Done, publishing the result and shutting down.");
