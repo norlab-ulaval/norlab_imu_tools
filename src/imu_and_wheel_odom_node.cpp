@@ -33,7 +33,6 @@ public:
     imuAndWheelOdomNode():
             Node("imu_and_wheel_odom_node")
     {
-//            ros::init(argc, argv, ROS_PACKAGE_NAME);
         double p_wheel_odom_expected_rate = 20.0;
         this->declare_parameter<std::string>("odom_frame", "odom");
         this->get_parameter("odom_frame", p_odom_frame_);
@@ -214,11 +213,13 @@ private:
     tf2::Quaternion current_attitude;
     tf2::Quaternion imu_alignment_;
     tf2::Quaternion mag_north_correction_;
+    tf2::Quaternion initial_offset_;
     double mag_north_correction_yaw_;
     std::chrono::time_point<std::chrono::system_clock> stamp_;
     rclcpp::Time msg_stamp_;
     bool is_imu_alignment_set;
     bool is_imu_mag_north_correction_set;
+    bool is_initial_offset_set;
 
     bool p_publish_odom_;
     bool p_force_2d_;
@@ -253,79 +254,92 @@ private:
     {
 //        tf2::quaternionMsgToTF(imu_msg.orientation, tmp_);
         tf2::fromMsg(imu_msg.orientation, tmp_);
-        //tmp_ = tf2::Quaternion(0,0,0,1);
-        if(std::isnan(tmp_.getX()) || std::isnan(tmp_.getY()) || std::isnan(tmp_.getZ()) || std::isnan(tmp_.getW()))
-        {
-            RCLCPP_WARN(this->get_logger(), "Received IMU message with NaN values, dropping");
-            return;
-        }
 
-        tmp_ = mag_north_correction_ * tmp_ * imu_alignment_;
-        tmp_.normalize();
-
-        current_attitude = tmp_;
-        if(p_force_2d_)
+        if(!is_initial_offset_set)
         {
-            const tf2::Matrix3x3 matrix(current_attitude);
-            double roll, pitch, yaw;
-            matrix.getRPY(roll, pitch, yaw);
-            current_attitude.setRPY(0.0, 0.0, yaw);
-            transform_.setRotation(current_attitude);
+            initial_offset_ = tmp_;
+            initial_offset_.normalize();
+            is_initial_offset_set = true;
         }
         else
         {
-            transform_.setRotation(current_attitude);
-        }
-        if(p_force_2d_)
-        {
-            transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), 0.0));
-        }
-        else
-        {
-            transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
-        }
-        msg_stamp_ = rclcpp::Time(imu_msg.header.stamp);
-        transform_.stamp_ = tf2::TimePoint(std::chrono::nanoseconds(msg_stamp_.nanoseconds()));
-        tf2::convert(transform_, transform_msg_);
-        transform_msg_.child_frame_id = p_base_frame_;
+            //tmp_ = tf2::Quaternion(0,0,0,1);
+            if(std::isnan(tmp_.getX()) || std::isnan(tmp_.getY()) || std::isnan(tmp_.getZ()) || std::isnan(tmp_.getW()))
+            {
+                RCLCPP_WARN(this->get_logger(), "Received IMU message with NaN values, dropping");
+                return;
+            }
 
+            // Apply inverse of the initial offset
+            tf2::Quaternion offset_inverse = initial_offset_.inverse();
+            tmp_ = offset_inverse * tmp_;
+            tmp_ = mag_north_correction_ * tmp_ * imu_alignment_;
+            tmp_.normalize();
 
-//        tfB_->sendTransform(transform_);
-        tfBroadcaster->sendTransform(transform_msg_);
-
-        if(p_publish_odom_)
-        {
-            geometry_msgs::msg::Quaternion quat_msg;
+            current_attitude = tmp_;
             if(p_force_2d_)
             {
                 const tf2::Matrix3x3 matrix(current_attitude);
                 double roll, pitch, yaw;
                 matrix.getRPY(roll, pitch, yaw);
                 current_attitude.setRPY(0.0, 0.0, yaw);
-                tf2::convert(current_attitude, quat_msg);
+                transform_.setRotation(current_attitude);
             }
             else
             {
-                tf2::convert(current_attitude, quat_msg);
+                transform_.setRotation(current_attitude);
             }
-            odom_msg_.pose.pose.orientation = quat_msg;
-
-            odom_msg_.pose.pose.position.x = current_position.x();
-            odom_msg_.pose.pose.position.y = current_position.y();
             if(p_force_2d_)
             {
-                odom_msg_.pose.pose.position.z = 0.0;
+                transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), 0.0));
             }
             else
             {
-                odom_msg_.pose.pose.position.z = current_position.z();
+                transform_.setOrigin(tf2::Vector3(current_position.x(), current_position.y(), current_position.z()));
             }
-            odom_msg_.twist.twist.linear.x = current_linear_vel.x();
-            odom_msg_.twist.twist.linear.y = current_linear_vel.y();
-            odom_msg_.twist.twist.linear.z = current_linear_vel.z();
+            msg_stamp_ = rclcpp::Time(imu_msg.header.stamp);
+            transform_.stamp_ = tf2::TimePoint(std::chrono::nanoseconds(msg_stamp_.nanoseconds()));
+            tf2::convert(transform_, transform_msg_);
+            transform_msg_.child_frame_id = p_base_frame_;
 
-            odom_msg_.header.stamp = imu_msg.header.stamp;
-            imuAndWheelOdomPublisher->publish(odom_msg_);
+
+    //        tfB_->sendTransform(transform_);
+            tfBroadcaster->sendTransform(transform_msg_);
+
+            if(p_publish_odom_)
+            {
+                geometry_msgs::msg::Quaternion quat_msg;
+                if(p_force_2d_)
+                {
+                    const tf2::Matrix3x3 matrix(current_attitude);
+                    double roll, pitch, yaw;
+                    matrix.getRPY(roll, pitch, yaw);
+                    current_attitude.setRPY(0.0, 0.0, yaw);
+                    tf2::convert(current_attitude, quat_msg);
+                }
+                else
+                {
+                    tf2::convert(current_attitude, quat_msg);
+                }
+                odom_msg_.pose.pose.orientation = quat_msg;
+
+                odom_msg_.pose.pose.position.x = current_position.x();
+                odom_msg_.pose.pose.position.y = current_position.y();
+                if(p_force_2d_)
+                {
+                    odom_msg_.pose.pose.position.z = 0.0;
+                }
+                else
+                {
+                    odom_msg_.pose.pose.position.z = current_position.z();
+                }
+                odom_msg_.twist.twist.linear.x = current_linear_vel.x();
+                odom_msg_.twist.twist.linear.y = current_linear_vel.y();
+                odom_msg_.twist.twist.linear.z = current_linear_vel.z();
+
+                odom_msg_.header.stamp = imu_msg.header.stamp;
+                imuAndWheelOdomPublisher->publish(odom_msg_);
+            }
         }
     }
 
