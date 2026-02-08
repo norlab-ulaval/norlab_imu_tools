@@ -51,6 +51,12 @@ public:
         this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
         this->get_parameter("odom_topic_name", p_odom_topic_name_);
 
+        this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
+        this->get_parameter("odom_topic_name", p_odom_topic_name_);
+
+        this->declare_parameter<double>("wheel_odom_velocity_scale_x", 1.0);
+        this->get_parameter("wheel_odom_velocity_scale_x", p_wheel_odom_vx_scale);
+
         // If odom required, advertize the publisher and prepare the constant parts of the message
         if(p_publish_odom_)
         {
@@ -231,6 +237,7 @@ private:
     // input wheel odom stuff
     bool initial_wheel_odom_received = false;
     rclcpp::Time previous_w_odom_stamp;
+    double p_wheel_odom_vx_scale = 1.0;
     double p_longest_expected_input_odom_period = MISSED_ODOM_MSG_SAFETY_MULTIPLIER / 20.0;
 
     // output odom stuff
@@ -361,7 +368,7 @@ private:
 
             // express the velocity in the world frame
             tf2::Vector3 velocity_in_world =
-                    rotation_body_to_world * tf2::Vector3(wheel_odom_msg.twist.twist.linear.x,
+                    rotation_body_to_world * tf2::Vector3(wheel_odom_msg.twist.twist.linear.x  * p_wheel_odom_vx_scale,
                                                           wheel_odom_msg.twist.twist.linear.y,
                                                           wheel_odom_msg.twist.twist.linear.z);
             // time increment
@@ -392,7 +399,7 @@ private:
 
             // update the current position and linear velocity
             current_position = new_position;
-            current_linear_vel = tf2::Vector3(wheel_odom_msg.twist.twist.linear.x,
+            current_linear_vel = tf2::Vector3(wheel_odom_msg.twist.twist.linear.x * p_wheel_odom_vx_scale,
                                               wheel_odom_msg.twist.twist.linear.y,
                                               wheel_odom_msg.twist.twist.linear.z);
         }
