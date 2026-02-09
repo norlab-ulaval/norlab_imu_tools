@@ -51,9 +51,6 @@ public:
         this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
         this->get_parameter("odom_topic_name", p_odom_topic_name_);
 
-        this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
-        this->get_parameter("odom_topic_name", p_odom_topic_name_);
-
         this->declare_parameter<double>("wheel_odom_velocity_scale_x", 1.0);
         this->get_parameter("wheel_odom_velocity_scale_x", p_wheel_odom_vx_scale);
 
