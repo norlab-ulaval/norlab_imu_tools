@@ -24,6 +24,7 @@ private:
     double xBias = 0.0;
     double yBias = 0.0;
     double zBias = 0.0;
+    bool biasAcquired = false;
 
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imuCompensatedPub;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imuSubscription;
@@ -34,16 +35,21 @@ private:
         this->xBias = biasMsg.vector.x;
         this->yBias = biasMsg.vector.y;
         this->zBias = biasMsg.vector.z;
+        this->biasAcquired = true;
         RCLCPP_INFO(this->get_logger(), "Bias acquired.");
     }
 
     void imuMsgCallback(const sensor_msgs::msg::Imu &imuMsg) {
-        sensor_msgs::msg::Imu imuMsgUnbiased;
-        imuMsgUnbiased = imuMsg;
-        imuMsgUnbiased.angular_velocity.x -= this->xBias;
-        imuMsgUnbiased.angular_velocity.y -= this->yBias;
-        imuMsgUnbiased.angular_velocity.z -= this->zBias ;
-        imuCompensatedPub->publish(imuMsgUnbiased);
+        if (this->biasAcquired == true)
+        {
+            sensor_msgs::msg::Imu imuMsgUnbiased;
+            imuMsgUnbiased = imuMsg;
+            imuMsgUnbiased.angular_velocity.x -= this->xBias;
+            imuMsgUnbiased.angular_velocity.y -= this->yBias;
+            imuMsgUnbiased.angular_velocity.z -= this->zBias ;
+            imuCompensatedPub->publish(imuMsgUnbiased);
+        }
+        
     }
 };
 
