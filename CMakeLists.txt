@@ -73,4 +73,16 @@ install(TARGETS imu_bias_compensator_node
         DESTINATION lib/${PROJECT_NAME}
         )
 
+add_executable(command_odom_node src/command_odom_node.cpp)
+ament_target_dependencies(command_odom_node
+        rclcpp
+        std_msgs
+        nav_msgs
+        tf2
+        tf2_geometry_msgs
+        )
+install(TARGETS command_odom_node
+        DESTINATION lib/${PROJECT_NAME}
+        )
+
 ament_package()
