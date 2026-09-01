@@ -23,6 +23,7 @@
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <cmath>
 #include <sstream>
+#include <stdexcept>
 
 using namespace std::chrono_literals;
 #define MISSED_ODOM_MSG_SAFETY_MULTIPLIER 6.0
@@ -49,6 +50,9 @@ public:
 
         this->declare_parameter<bool>("use_altitude", true);
         this->get_parameter("use_altitude", p_use_altitude_);
+
+        this->declare_parameter<bool>("force_2D", false);
+        this->get_parameter("force_2D", p_force_2d_);
 
         this->declare_parameter<std::string>("odom_topic_name", "imu_odom");
         this->get_parameter("odom_topic_name", p_odom_topic_name_);
@@ -94,6 +98,10 @@ public:
         sensor_msgs::msg::Imu imu_msg;
         std::string imu_frame;
 
+        // rclcpp::node_interfaces::NodeTopics node_topics;
+
+        std::string actual_topic_name = this->get_node_topics_interface()->resolve_topic_name("imu_topic", false);
+
         auto sub = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic", 1, [](const std::shared_ptr<const sensor_msgs::msg::Imu>&) {});
         auto response =  rclcpp::wait_for_message<sensor_msgs::msg::Imu, int64_t, std::milli>(imu_msg, sub, this->get_node_options().context(), 5s);
 
@@ -103,11 +111,10 @@ public:
         }
         else
         {
-            throw rclcpp::exceptions::InvalidTopicNameError(this->get_namespace(),
-                                                            "No IMU message received."
-                                                            "\nCannot find the tf between base_link and IMU without the IMU frame name."
-                                                            "\nPlease make sure the IMU messages are published.",
-                                                            0);
+            RCLCPP_ERROR_STREAM(this->get_logger(), "No IMU message received." <<
+                                    "\nCannot find the tf between " << p_base_frame_ << " and the IMU without the IMU frame name."
+                                    << "\nPlease make sure the IMU messages are published on topic " << actual_topic_name);
+            throw std::runtime_error("");
         }
 
         // Quaternion for IMU alignment
@@ -133,7 +140,7 @@ public:
 //					'Warning: Invalid frame ID "imu" passed to canTransform argument target_frame - frame does not exist
 //					 at line 93 in ./src/buffer_core.cpp' show up in the log.
                 unsigned int ctr = 0;
-                const unsigned int ctr_max = 10;
+                const unsigned int ctr_max = 100;
                 auto sleep_duration_ms = 10ms;
                 while(!tf_buffer->_frameExists(imu_frame))
                 {
@@ -244,6 +251,7 @@ private:
     bool is_imu_mag_north_correction_set;
 
     bool p_publish_odom_;
+    bool p_force_2d_;
     std::string p_odom_topic_name_;
     bool p_use_altitude_;
 //        ros::Publisher *odom_pub_;
@@ -357,17 +365,30 @@ private:
         if(p_publish_odom_)
         {
             geometry_msgs::msg::Quaternion quat_msg;
-            tf2::convert(current_attitude, quat_msg);
-            // tf2::convert(tf2::Quaternion(0,0,0,1), quat_msg);
+            if(p_force_2d_)
+            {
+                const tf2::Matrix3x3 matrix(current_attitude);
+                double roll, pitch, yaw;
+                matrix.getRPY(roll, pitch, yaw);
+                current_attitude.setRPY(0.0, 0.0, yaw);
+                tf2::convert(current_attitude, quat_msg);
+            }
+            else
+            {
+                tf2::convert(current_attitude, quat_msg);
+            }
             odom_msg_.pose.pose.orientation = quat_msg;
 
             odom_msg_.pose.pose.position.x = current_position.x();
             odom_msg_.pose.pose.position.y = current_position.y();
-            odom_msg_.pose.pose.position.z = current_position.z();
-            // odom_msg_.pose.pose.position.x = 0.0;
-            // odom_msg_.pose.pose.position.y = 0.0;
-            // odom_msg_.pose.pose.position.z = 0.0;
-
+            if(p_force_2d_)
+            {
+                odom_msg_.pose.pose.position.z = 0.0;
+            }
+            else
+            {
+                odom_msg_.pose.pose.position.z = current_position.z();
+            }
             odom_msg_.twist.twist.linear.x = current_linear_vel.x();
             odom_msg_.twist.twist.linear.y = current_linear_vel.y();
             odom_msg_.twist.twist.linear.z = current_linear_vel.z();

@@ -14,7 +14,11 @@
 
     ## If odom message needed
     <param name="publish_odom" value="True" />
+<<<<<<<< HEAD:launch/marmotte_imu_and_wheel_odom_without_altitude_launch.xml
     <param name="use_altitude" value="False" />
+========
+    <param name="use_altitude" value="True" />
+>>>>>>>> 383066be8f0bf12aa85d060dea740efc977190c8:launch/marmotte_imu_and_wheel_odom_with_altitude_launch.xml
     <param name="odom_topic_name" value="imu_and_wheel_odom" />
   </node>
 
