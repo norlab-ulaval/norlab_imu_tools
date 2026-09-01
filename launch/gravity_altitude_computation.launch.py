@@ -24,7 +24,7 @@ def generate_launch_description():
             remappings=[
                 ("ref_pressure_in_setra", "/setra/pressure"),
                 ("ref_pressure_in_dps", "/dps310_alti/filtered_pressure_temp_compensated"),
-                ("ref_temp_in", "/mcp9808/temperature"),
+                ("ref_temp_in",  f"/dps310_{i}/data"),
                 ("sensor_pressure_in", f"/dps310_{i}/filtered_pressure_temp_compensated"),
                 ("altitude_out", f"/altitude_{i}")
             ],
