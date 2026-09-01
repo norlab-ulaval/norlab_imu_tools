@@ -133,4 +133,18 @@ install(TARGETS altitude_moving_average_node
         DESTINATION lib/${PROJECT_NAME}
 )
 
+
+add_executable(alti_gyro_wheel_odom src/alti_gyro_wheel_odom_node.cpp)
+ament_target_dependencies(alti_gyro_wheel_odom
+        rclcpp
+        sensor_msgs
+        std_msgs
+        nav_msgs
+        tf2
+        tf2_geometry_msgs
+        )
+install(TARGETS alti_gyro_wheel_odom
+        DESTINATION lib/${PROJECT_NAME}
+        )
+
 ament_package()
