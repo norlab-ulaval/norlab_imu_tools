@@ -1,4 +1,3 @@
-#include "geometry_msgs/msg/quaternion_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/imu.hpp"
@@ -9,38 +8,33 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <tf2/LinearMath/Quaternion.hpp>
 #include <tf2/LinearMath/Vector3.hpp>
-#include <tf2/convert.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 
 #define MISSED_MSG_SAFETY_MULTIPLIER 6.0
 
 namespace norlab_imu_tools {
-class AltiGyroWheelOdom : public rclcpp::Node {
+// Planar dead reckoning: yaw from integrating the gyro's z axis, translation from the wheel
+// odometry's forward speed. No attitude source at all, so z, roll and pitch stay zero and the
+// estimate keeps going when the altimeters drop out.
+class Se2WheelGyroOdom : public rclcpp::Node {
   public:
-    AltiGyroWheelOdom() : Node("alti_gyro_wheel_odom") {
+    Se2WheelGyroOdom() : Node("se2_wheel_gyro_odom") {
         p_longest_expected_imu_period_ = declareExpectedPeriod("imu_expected_rate", 200.0);
-        p_longest_expected_attitude_period_ = declareExpectedPeriod("attitude_expected_rate", 45.0);
         p_longest_expected_wheel_odom_period_ = declareExpectedPeriod("wheel_odom_expected_rate", 10.0);
 
-        this->declare_parameter<double>("wheel_odom_velocity_scale_x", 0.95);
-        this->get_parameter("wheel_odom_velocity_scale_x", p_wheel_odom_vx_scale_);
-
-        // Off when another node owns the odom -> base_link TF and this one is only
-        // recorded for comparison.
-        this->declare_parameter<bool>("publish_tf", true);
-        this->get_parameter("publish_tf", p_publish_tf_);
-
-        attitude_sub_ = this->create_subscription<geometry_msgs::msg::QuaternionStamped>(
-            "attitude_topic", 10, std::bind(&AltiGyroWheelOdom::attitudeCallback, this, std::placeholders::_1));
+        p_wheel_odom_vx_scale_ = this->declare_parameter<double>("wheel_odom_velocity_scale_x", 0.95);
+        p_odom_frame_ = this->declare_parameter<std::string>("odom_frame", "odom");
+        p_base_frame_ = this->declare_parameter<std::string>("base_frame", "base_link");
+        p_publish_tf_ = this->declare_parameter<bool>("publish_tf", false);
 
         imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-            "imu_topic", 10, std::bind(&AltiGyroWheelOdom::imuCallback, this, std::placeholders::_1));
+            "imu_topic", 10, std::bind(&Se2WheelGyroOdom::imuCallback, this, std::placeholders::_1));
 
         wheel_odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-            "wheel_odom_topic", 10, std::bind(&AltiGyroWheelOdom::wheelOdomCallback, this, std::placeholders::_1));
+            "wheel_odom_topic", 10, std::bind(&Se2WheelGyroOdom::wheelOdomCallback, this, std::placeholders::_1));
 
-        alti_gyro_wheel_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("alti_gyro_wheel_odom_topic", 10);
+        se2_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("se2_odom_topic", 10);
 
         if (p_publish_tf_) {
             tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
@@ -79,26 +73,19 @@ class AltiGyroWheelOdom : public rclcpp::Node {
         }
 
         yaw_ += imu_msg.angular_velocity.z * dt;
-        heading_quat_.setRPY(0.0, 0.0, yaw_);
 
         *last_imu_msg_stamp_ = current_stamp;
-
-        if (!isFresh(last_attitude_stamp_, current_stamp, p_longest_expected_attitude_period_)) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "No fresh attitude message, not publishing odometry.");
-            return;
-        }
 
         if (!isFresh(last_wheel_odom_stamp_, current_stamp, p_longest_expected_wheel_odom_period_)) {
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "No fresh wheel odometry message, assuming zero speed.");
             speed_x_base_link_ = 0.0;
         }
 
-        tf2::Quaternion orientation_quat = (heading_quat_ * attitude_quat_).normalize();
+        x_ += speed_x_base_link_ * std::cos(yaw_) * dt;
+        y_ += speed_x_base_link_ * std::sin(yaw_) * dt;
 
-        const tf2::Vector3 velocity_base_link = tf2::Vector3(speed_x_base_link_, 0.0, 0.0);
-        const tf2::Vector3 velocity_world = tf2::quatRotate(orientation_quat, velocity_base_link);
-
-        current_position_ += dt * velocity_world;
+        tf2::Quaternion orientation_quat;
+        orientation_quat.setRPY(0.0, 0.0, yaw_);
 
         publishOdometry(current_stamp, orientation_quat);
 
@@ -111,12 +98,12 @@ class AltiGyroWheelOdom : public rclcpp::Node {
         nav_msgs::msg::Odometry odom_msg;
 
         odom_msg.header.stamp = timestamp;
-        odom_msg.header.frame_id = "odom";
-        odom_msg.child_frame_id = "base_link";
+        odom_msg.header.frame_id = p_odom_frame_;
+        odom_msg.child_frame_id = p_base_frame_;
 
-        odom_msg.pose.pose.position.x = current_position_.x();
-        odom_msg.pose.pose.position.y = current_position_.y();
-        odom_msg.pose.pose.position.z = current_position_.z();
+        odom_msg.pose.pose.position.x = x_;
+        odom_msg.pose.pose.position.y = y_;
+        odom_msg.pose.pose.position.z = 0.0;
 
         odom_msg.pose.pose.orientation = tf2::toMsg(odom_to_base_link_rotation);
 
@@ -124,39 +111,27 @@ class AltiGyroWheelOdom : public rclcpp::Node {
         odom_msg.twist.twist.linear.y = 0.0;
         odom_msg.twist.twist.linear.z = 0.0;
 
-        alti_gyro_wheel_odom_pub_->publish(odom_msg);
+        se2_odom_pub_->publish(odom_msg);
     }
 
     void broadcastTf(const rclcpp::Time& timestamp, const tf2::Quaternion& odom_to_base_link_rotation) {
         geometry_msgs::msg::TransformStamped transform;
 
         transform.header.stamp = timestamp;
-        transform.header.frame_id = "odom";
-        transform.child_frame_id = "base_link";
+        transform.header.frame_id = p_odom_frame_;
+        transform.child_frame_id = p_base_frame_;
 
-        transform.transform.translation.x = current_position_.x();
-        transform.transform.translation.y = current_position_.y();
-        transform.transform.translation.z = current_position_.z();
+        transform.transform.translation.x = x_;
+        transform.transform.translation.y = y_;
+        transform.transform.translation.z = 0.0;
 
         transform.transform.rotation = tf2::toMsg(odom_to_base_link_rotation);
 
         tf_broadcaster_->sendTransform(transform);
     }
 
-    void attitudeCallback(const geometry_msgs::msg::QuaternionStamped& attitude_msg) {
-        if (std::isnan(attitude_msg.quaternion.x) || std::isnan(attitude_msg.quaternion.y) || std::isnan(attitude_msg.quaternion.z) ||
-            std::isnan(attitude_msg.quaternion.w)) {
-            RCLCPP_WARN(this->get_logger(), "Received Attitude Quaternion message with NaN values, dropping");
-            return;
-        }
-
-        tf2::fromMsg(attitude_msg.quaternion, attitude_quat_);
-        last_attitude_stamp_ = rclcpp::Time(attitude_msg.header.stamp);
-    }
-
     void wheelOdomCallback(const nav_msgs::msg::Odometry& wheel_odom_msg) {
-        if (std::isnan(wheel_odom_msg.twist.twist.linear.x) || std::isnan(wheel_odom_msg.twist.twist.linear.y) ||
-            std::isnan(wheel_odom_msg.twist.twist.linear.z)) {
+        if (std::isnan(wheel_odom_msg.twist.twist.linear.x)) {
             RCLCPP_WARN(this->get_logger(), "Received Wheel Odometry message with NaN values, dropping");
             return;
         }
@@ -167,9 +142,7 @@ class AltiGyroWheelOdom : public rclcpp::Node {
 
   private:
     double declareExpectedPeriod(const std::string& parameter_name, double default_rate) {
-        double rate = default_rate;
-        this->declare_parameter<double>(parameter_name, default_rate);
-        this->get_parameter(parameter_name, rate);
+        double rate = this->declare_parameter<double>(parameter_name, default_rate);
 
         if (rate <= 0.0) {
             throw std::invalid_argument("Zero or negative rate for " + parameter_name + " is a nonsense.");
@@ -183,32 +156,30 @@ class AltiGyroWheelOdom : public rclcpp::Node {
     }
 
     std::optional<rclcpp::Time> last_imu_msg_stamp_;
-    std::optional<rclcpp::Time> last_attitude_stamp_;
     std::optional<rclcpp::Time> last_wheel_odom_stamp_;
     double speed_x_base_link_ = 0.0;
     double yaw_ = 0.0;
-    tf2::Vector3 current_position_ = tf2::Vector3(0.0, 0.0, 0.0);
-    tf2::Quaternion attitude_quat_ = tf2::Quaternion(0.0, 0.0, 0.0, 1.0);
-    tf2::Quaternion heading_quat_ = tf2::Quaternion(0.0, 0.0, 0.0, 1.0);
+    double x_ = 0.0;
+    double y_ = 0.0;
 
     double p_longest_expected_imu_period_;
-    double p_longest_expected_attitude_period_;
     double p_longest_expected_wheel_odom_period_;
-    double p_wheel_odom_vx_scale_ = 0.95;
-    bool p_publish_tf_ = true;
+    double p_wheel_odom_vx_scale_;
+    std::string p_odom_frame_;
+    std::string p_base_frame_;
+    bool p_publish_tf_;
 
-    rclcpp::Subscription<geometry_msgs::msg::QuaternionStamped>::SharedPtr attitude_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr wheel_odom_sub_;
 
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr alti_gyro_wheel_odom_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr se2_odom_pub_;
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 };
 }; // namespace norlab_imu_tools
 
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<norlab_imu_tools::AltiGyroWheelOdom>());
+    rclcpp::spin(std::make_shared<norlab_imu_tools::Se2WheelGyroOdom>());
     rclcpp::shutdown();
     return 0;
 }

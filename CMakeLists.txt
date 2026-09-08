@@ -151,6 +151,47 @@ install(TARGETS alti_gyro_wheel_odom
         )
 
 
+add_executable(se2_wheel_gyro_odom src/se2_wheel_gyro_odom_node.cpp)
+ament_target_dependencies(se2_wheel_gyro_odom
+        rclcpp
+        sensor_msgs
+        std_msgs
+        nav_msgs
+        tf2
+        tf2_ros
+        tf2_geometry_msgs
+        )
+install(TARGETS se2_wheel_gyro_odom
+        DESTINATION lib/${PROJECT_NAME}
+        )
+
+add_executable(constant_velocity_odom src/constant_velocity_odom_node.cpp)
+ament_target_dependencies(constant_velocity_odom
+        rclcpp
+        nav_msgs
+        geometry_msgs
+        tf2
+        tf2_ros
+        tf2_geometry_msgs
+        )
+install(TARGETS constant_velocity_odom
+        DESTINATION lib/${PROJECT_NAME}
+        )
+
+add_executable(attitude_constant_velocity_odom src/attitude_constant_velocity_odom_node.cpp)
+ament_target_dependencies(attitude_constant_velocity_odom
+        rclcpp
+        nav_msgs
+        geometry_msgs
+        tf2
+        tf2_ros
+        tf2_geometry_msgs
+        )
+install(TARGETS attitude_constant_velocity_odom
+        DESTINATION lib/${PROJECT_NAME}
+        )
+
+
 install(PROGRAMS
   scripts/attitude_from_pressure.py
   DESTINATION lib/${PROJECT_NAME}

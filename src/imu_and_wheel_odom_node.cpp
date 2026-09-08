@@ -48,6 +48,11 @@ public:
         this->declare_parameter<bool>("publish_odom", false);
         this->get_parameter("publish_odom", p_publish_odom_);
 
+        // Off when another node owns the odom -> base_link TF and this one is only
+        // recorded for comparison.
+        this->declare_parameter<bool>("publish_tf", true);
+        this->get_parameter("publish_tf", p_publish_tf_);
+
         this->declare_parameter<bool>("use_altitude", true);
         this->get_parameter("use_altitude", p_use_altitude_);
 
@@ -81,7 +86,7 @@ public:
         this->declare_parameter<bool>("publish_translation", true);
         this->get_parameter("publish_translation", p_allow_translation);
 
-        this->declare_parameter<double>("wheel_odom_velocity_scale_x", 1.0);
+        this->declare_parameter<double>("wheel_odom_velocity_scale_x", 0.95);
         this->get_parameter("wheel_odom_velocity_scale_x", p_wheel_odom_vx_scale);
 
         this->declare_parameter<double>("wheel_odom_expected_rate", 20.0);
@@ -93,6 +98,13 @@ public:
         }
         p_longest_expected_input_odom_period = (1.0 * MISSED_ODOM_MSG_SAFETY_MULTIPLIER) / p_wheel_odom_expected_rate;
 
+        // How long to wait at startup for the first IMU message, whose frame_id is needed
+        // for the alignment lookup. Offline replays need more than a few seconds: the bag
+        // takes a while to start publishing.
+        this->declare_parameter<double>("imu_wait_timeout", 5.0);
+        double imu_wait_timeout_seconds;
+        this->get_parameter("imu_wait_timeout", imu_wait_timeout_seconds);
+
         // get IMU frame_id
         RCLCPP_DEBUG(this->get_logger(), "Waiting for IMU message...");
         sensor_msgs::msg::Imu imu_msg;
@@ -103,7 +115,8 @@ public:
         std::string actual_topic_name = this->get_node_topics_interface()->resolve_topic_name("imu_topic", false);
 
         auto sub = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic", 1, [](const std::shared_ptr<const sensor_msgs::msg::Imu>&) {});
-        auto response =  rclcpp::wait_for_message<sensor_msgs::msg::Imu, int64_t, std::milli>(imu_msg, sub, this->get_node_options().context(), 5s);
+        auto response =  rclcpp::wait_for_message<sensor_msgs::msg::Imu, int64_t, std::milli>(imu_msg, sub, this->get_node_options().context(),
+                                                                                             std::chrono::milliseconds(static_cast<int64_t>(imu_wait_timeout_seconds * 1000)));
 
         if(response)
         {
@@ -251,6 +264,7 @@ private:
     bool is_imu_mag_north_correction_set;
 
     bool p_publish_odom_;
+    bool p_publish_tf_;
     bool p_force_2d_;
     std::string p_odom_topic_name_;
     bool p_use_altitude_;
@@ -277,9 +291,9 @@ private:
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr wheelOdomSubscription;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imuSubscription;
     // altitude stuff
-    double firstAltitudeMeasurementCorrectFrame;
-    double lastAltitudeMeasurementCorrectFrame;
-    double lastAltitudeMeasurementAltiFrame;
+    double firstAltitudeMeasurementCorrectFrame = 0.0;
+    double lastAltitudeMeasurementCorrectFrame = 0.0;
+    double lastAltitudeMeasurementAltiFrame = 0.0;
     bool isFirstAltitude = true;
     std::mutex lastAltitudeAltiFrameMutex;
     std::mutex lastAltitudeMutex;
@@ -360,7 +374,10 @@ private:
 
 
 //        tfB_->sendTransform(transform_);
-        tfBroadcaster->sendTransform(transform_msg_);
+        if(p_publish_tf_)
+        {
+            tfBroadcaster->sendTransform(transform_msg_);
+        }
 
         if(p_publish_odom_)
         {
