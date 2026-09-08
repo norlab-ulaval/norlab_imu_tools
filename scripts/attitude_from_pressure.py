@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import collections
+
 import rclpy
 from rclpy.node import Node
 
@@ -19,6 +21,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import numpy as np
 import pandas as pd
+from scipy.signal import butter, lfilter, lfilter_zi
 
 
 def load_c_from_csv(csv_file_path: str) -> dict[int, np.ndarray]:
@@ -137,6 +140,70 @@ def get_quaternion_from_up_vector(
     return quat
 
 
+# The offline sweep that picked these defaults used centered, reflect-padded smoothing
+# and filtfilt, both of which read future samples. A node feeding the mapper's
+# odom -> base_link TF cannot: a late attitude is a failed lookupTransform and a scan
+# dropped from the map. So these are the causal equivalents, and 31 samples / 1.0 Hz are
+# starting points to re-sweep on the rig rather than transplanted optima.
+
+
+class MovingAverageFilter:
+    """Trailing boxcar over the last `window_samples` vectors."""
+
+    def __init__(self, window_samples: int):
+        if window_samples < 1:
+            raise ValueError(f"filter_window_samples must be >= 1, got {window_samples}")
+        self.window_samples = window_samples
+        self.buffer = collections.deque(maxlen=window_samples)
+
+    def __call__(self, vector: np.ndarray) -> np.ndarray:
+        # A partial average while the window fills, so the attitude stream never has a
+        # gap at startup.
+        self.buffer.append(vector)
+        return np.mean(self.buffer, axis=0)
+
+    def describe(self) -> str:
+        return f"moving_average(window_samples={self.window_samples})"
+
+
+class LowPassFilter:
+    """Single-pass Butterworth, one independent filter state per axis."""
+
+    def __init__(self, cutoff_hz: float, order: int, sample_rate_hz: float):
+        nyquist = sample_rate_hz / 2.0
+        if not 0.0 < cutoff_hz < nyquist:
+            raise ValueError(
+                f"filter_cutoff_hz must be in (0, {nyquist}), got {cutoff_hz}"
+            )
+
+        self.cutoff_hz = cutoff_hz
+        self.order = order
+        self.sample_rate_hz = sample_rate_hz
+        self.b, self.a = butter(order, cutoff_hz / nyquist, btype="low")
+        self.state = None
+
+    def __call__(self, vector: np.ndarray) -> np.ndarray:
+        if self.state is None:
+            # Steady-state response to a step of the first sample, so the filter starts
+            # settled on the current attitude instead of ramping up from zero.
+            self.state = np.outer(lfilter_zi(self.b, self.a), vector)
+
+        filtered = np.empty(3)
+        for axis in range(3):
+            output, self.state[:, axis] = lfilter(
+                self.b, self.a, vector[axis : axis + 1], zi=self.state[:, axis]
+            )
+            filtered[axis] = output[0]
+
+        return filtered
+
+    def describe(self) -> str:
+        return (
+            f"lowpass(cutoff_hz={self.cutoff_hz}, order={self.order}, "
+            f"sample_rate_hz={self.sample_rate_hz})"
+        )
+
+
 NUMBER_OF_SENSORS = 8
 
 
@@ -160,6 +227,10 @@ class AttitudeFromPressureSensors(Node):
 
         self.C_matrices = load_c_from_csv(temperature_calibration_csv_path)
 
+        self.attitude_filter = self._build_filter()
+        self.non_finite_count = 0
+        self.last_up_vector = None
+
         self.pressure_subs = []
         for i in range(NUMBER_OF_SENSORS):
             topic = f"dps310_{i}/data"
@@ -180,6 +251,49 @@ class AttitudeFromPressureSensors(Node):
         self.attitude_publisher = self.create_publisher(
             QuaternionStamped, "attitude_topic", 10
         )
+
+        # With a filter on, the unfiltered attitude goes out alongside it so a single
+        # replay yields both .tum files over identical data.
+        self.raw_attitude_publisher = None
+        if self.attitude_filter is not None:
+            self.raw_attitude_publisher = self.create_publisher(
+                QuaternionStamped, "attitude_topic_raw", 10
+            )
+
+    def _build_filter(self):
+        """Resolve the `data_filter` parameter into a callable, or None."""
+        self.declare_parameter("data_filter", "none")
+        self.declare_parameter("filter_window_samples", 31)
+        self.declare_parameter("filter_cutoff_hz", 1.0)
+        self.declare_parameter("filter_order", 2)
+        self.declare_parameter("sample_rate_hz", 45.0)
+
+        data_filter = self.get_parameter("data_filter").value
+
+        if data_filter == "none":
+            attitude_filter = None
+        elif data_filter == "moving_average":
+            attitude_filter = MovingAverageFilter(
+                window_samples=self.get_parameter("filter_window_samples").value
+            )
+        elif data_filter == "lowpass":
+            attitude_filter = LowPassFilter(
+                cutoff_hz=self.get_parameter("filter_cutoff_hz").value,
+                order=self.get_parameter("filter_order").value,
+                sample_rate_hz=self.get_parameter("sample_rate_hz").value,
+            )
+        else:
+            raise ValueError(
+                f"data_filter must be one of 'none', 'moving_average', 'lowpass', "
+                f"got '{data_filter}'"
+            )
+
+        # Logged so run.log records which filter produced a given results folder: the
+        # parameters live in the launch file, which run_manifest.py does not copy.
+        description = "none" if attitude_filter is None else attitude_filter.describe()
+        self.get_logger().info(f"Attitude filter: {description}")
+
+        return attitude_filter
 
     def synced_pressure_callback(self, *msgs: CustomPressureTemperature):
         timestamp = msgs[0].header.stamp
@@ -214,11 +328,39 @@ class AttitudeFromPressureSensors(Node):
 
             sensor_altitudes.append(altitude_sensor)
 
-        normalized_up_vector = compute_up_vector_from_sensor_altitudes(
-            np.array(sensor_altitudes)
-        )
+        up_vector = compute_up_vector_from_sensor_altitudes(np.array(sensor_altitudes))
 
-        quaternion = get_quaternion_from_up_vector(normalized_up_vector, timestamp)
+        if not np.all(np.isfinite(up_vector)):
+            # A non-finite pressure poisons an IIR's state permanently, so the sample
+            # never reaches the filter. Holding the last output keeps the topic alive at
+            # rate: a gap here means no odom -> base_link and scans that fail to register.
+            self.non_finite_count += 1
+            self.get_logger().warn(
+                f"Non-finite up vector, holding last attitude "
+                f"({self.non_finite_count} dropped so far)",
+                throttle_duration_sec=5.0,
+            )
+            if self.last_up_vector is None:
+                return
+            filtered_up_vector = self.last_up_vector
+        else:
+            if self.raw_attitude_publisher is not None:
+                self.raw_attitude_publisher.publish(
+                    get_quaternion_from_up_vector(up_vector, timestamp)
+                )
+
+            if self.attitude_filter is None:
+                filtered_up_vector = up_vector
+            else:
+                # Filtering a unit vector keeps every sample weighted equally. The raw
+                # vector's magnitude is the height-difference scale, which drifts with
+                # temperature and would drag the direction with it.
+                filtered = self.attitude_filter(up_vector)
+                filtered_up_vector = filtered / np.linalg.norm(filtered)
+
+            self.last_up_vector = filtered_up_vector
+
+        quaternion = get_quaternion_from_up_vector(filtered_up_vector, timestamp)
 
         self.attitude_publisher.publish(quaternion)
 
