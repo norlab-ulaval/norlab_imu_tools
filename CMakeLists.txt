@@ -14,6 +14,9 @@ find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rtf_sensors_msgs REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 include_directories(
         ${norlab_imu_tools_INCLUDE_DIRS}
@@ -146,5 +149,11 @@ ament_target_dependencies(alti_gyro_wheel_odom
 install(TARGETS alti_gyro_wheel_odom
         DESTINATION lib/${PROJECT_NAME}
         )
+
+
+install(PROGRAMS
+  scripts/attitude_from_pressure.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ament_package()
