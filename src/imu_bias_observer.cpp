@@ -30,7 +30,7 @@ public:
     {
         bias_pub = this->create_publisher<geometry_msgs::msg::Vector3Stamped>("bias_topic_out", 10);
 
-        imu_subscription = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic_in", 10,
+        imu_subscription = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic_in", 100,  // 250 ms at 400 Hz
                                                                             std::bind(&imuBiasObserverNode::imuMsgCallback, this,
                                                                                       std::placeholders::_1));
 

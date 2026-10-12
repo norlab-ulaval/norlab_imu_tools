@@ -15,7 +15,7 @@ public:
                                                                                 std::bind(&imuBiasCompensatorNode::biasMsgCallback, this,
                                                                                            std::placeholders::_1));
 
-        imuSubscription = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic_in", 10,
+        imuSubscription = this->create_subscription<sensor_msgs::msg::Imu>("imu_topic_in", 100,  // 250 ms at 400 Hz
                                                                            std::bind(&imuBiasCompensatorNode::imuMsgCallback, this,
                                                                                       std::placeholders::_1));
         imuCompensatedPub = this->create_publisher<sensor_msgs::msg::Imu>("imu_topic_out", 10);
