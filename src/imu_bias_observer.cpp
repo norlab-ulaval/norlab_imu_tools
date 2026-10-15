@@ -62,14 +62,14 @@ private:
                 number_of_samples += 1;
 
                 if(number_of_samples % (target_observation_samples/5) == 0){
-                    RCLCPP_INFO(this->get_logger(), "IMU bias observer: Collected %d samples (%d\%) of %d.", number_of_samples, (100*number_of_samples/target_observation_samples), target_observation_samples);
+                    RCLCPP_INFO(this->get_logger(), "IMU bias observer: Collected %d samples (%d%%) of %d.", number_of_samples, (100*number_of_samples/target_observation_samples), target_observation_samples);
                 }
 
             }
             else
             {
                 geometry_msgs::msg::Vector3Stamped bias_msg;
-                bias_msg.header.stamp = this->now();;
+                bias_msg.header.stamp = this->now();
                 bias_msg.vector.x = angular_velocity_sum_x / double(number_of_samples);
                 bias_msg.vector.y = angular_velocity_sum_y / double(number_of_samples);
                 bias_msg.vector.z = angular_velocity_sum_z / double(number_of_samples);
